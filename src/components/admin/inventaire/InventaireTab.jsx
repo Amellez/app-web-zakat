@@ -1,23 +1,36 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Plus, RefreshCw, Loader2 } from 'lucide-react';
+import { Plus, RefreshCw, Loader2, Zap, CheckCircle2 } from 'lucide-react';
 import InventaireCard from './InventaireCard';
 import ModalAjouterArticle from './ModalAjouterArticle';
-import { getInventaire, updateArticleInventaire, supprimerArticleInventaire } from '@/lib/firebaseAdmin';
+import { 
+  getInventaire, 
+  updateArticleInventaire, 
+  supprimerArticleInventaire,
+  ecouterInventaire 
+} from '@/lib/firebaseAdmin';
 
-export default function InventaireTab({ inventaire, setInventaire }) {
+export default function InventaireTab({ inventaire, setInventaire, beneficiaires }) {
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState(null);
 
-  // Charger l'inventaire depuis Firebase
+  // 🔥 PAS de listener automatique - on charge juste l'inventaire au démarrage
+  useEffect(() => {
+    chargerInventaire();
+  }, []);
+
+  // Charger l'inventaire depuis Firebase (initial + refresh manuel)
   const chargerInventaire = async () => {
     setLoading(true);
     try {
       const data = await getInventaire();
       setInventaire(data);
+      setLastUpdate(new Date());
     } catch (error) {
       console.error('Erreur chargement inventaire:', error);
     } finally {
@@ -32,20 +45,33 @@ export default function InventaireTab({ inventaire, setInventaire }) {
 
   const handleSave = async (id) => {
     try {
-      // Mettre à jour dans Firebase
+      // Indiquer que la régénération va commencer
+      setIsRegenerating(true);
+      
+      // Mettre à jour dans Firebase (régénération automatique intégrée)
       await updateArticleInventaire(id, {
         quantite: parseFloat(editValue)
       });
 
-      // Mettre à jour localement
+      // Mettre à jour localement (sera aussi mis à jour par le listener)
       setInventaire(prev => prev.map(item =>
         item.id === id ? { ...item, quantite: parseFloat(editValue) } : item
       ));
       
       setEditingId(null);
+      setLastUpdate(new Date());
+
+      console.log('✅ Article mis à jour - Packs régénérés automatiquement');
+      
+      // Après 2 secondes, considérer que les packs sont synchronisés
+      setTimeout(() => {
+        setIsRegenerating(false);
+      }, 2000);
+      
     } catch (error) {
       console.error('Erreur mise à jour:', error);
       alert('Erreur lors de la mise à jour');
+      setIsRegenerating(false);
     }
   };
 
@@ -55,22 +81,45 @@ export default function InventaireTab({ inventaire, setInventaire }) {
     }
 
     try {
-      // Supprimer de Firebase
+      // Indiquer que la régénération va commencer
+      setIsRegenerating(true);
+      
+      // Supprimer de Firebase (régénération automatique intégrée)
       await supprimerArticleInventaire(id);
 
-      // Mettre à jour localement
+      // Mettre à jour localement (sera aussi mis à jour par le listener)
       setInventaire(prev => prev.filter(item => item.id !== id));
       
       alert('✅ Article supprimé avec succès');
+      setLastUpdate(new Date());
+
+      console.log('✅ Article supprimé - Packs régénérés automatiquement');
+      
+      // Après 2 secondes, considérer que les packs sont synchronisés
+      setTimeout(() => {
+        setIsRegenerating(false);
+      }, 2000);
+      
     } catch (error) {
       console.error('Erreur suppression:', error);
       alert('❌ Erreur lors de la suppression');
+      setIsRegenerating(false);
     }
   };
 
-  const handleSuccess = () => {
+  const handleSuccess = async () => {
+    // L'ajout déclenche automatiquement la régénération (dans firebaseAdmin.js)
+    setIsRegenerating(true);
+    
     // Recharger l'inventaire après ajout
-    chargerInventaire();
+    await chargerInventaire();
+    
+    console.log('✅ Article ajouté - Packs régénérés automatiquement');
+    
+    // Après 2 secondes, considérer que les packs sont synchronisés
+    setTimeout(() => {
+      setIsRegenerating(false);
+    }, 2000);
   };
 
   return (
@@ -95,6 +144,54 @@ export default function InventaireTab({ inventaire, setInventaire }) {
           </button>
         </div>
       </div>
+
+      {/* Info régénération automatique PERMANENTE */}
+      <div className="bg-gradient-to-r from-emerald-50 to-blue-50 border-2 border-emerald-200 rounded-lg p-4">
+        <div className="flex items-start gap-3">
+          <Zap className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-emerald-800 flex items-center gap-2">
+              Régénération automatique activée en permanence
+              {!isRegenerating ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              ) : (
+                <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
+              )}
+            </p>
+            <p className="text-sm text-emerald-700 mt-1">
+              Les packs sont automatiquement régénérés à chaque modification de l'inventaire (ajout, modification, suppression).
+              {isRegenerating && (
+                <span className="block mt-1 text-blue-600 font-semibold">
+                  🔄 Régénération en cours...
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
+        
+        {lastUpdate && (
+          <div className="mt-3 pt-3 border-t border-emerald-200">
+            <p className="text-xs text-emerald-600">
+              Dernière mise à jour : {lastUpdate.toLocaleTimeString('fr-FR')}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Indicateur de régénération en cours (plus visible) */}
+      {isRegenerating && (
+        <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 flex items-center gap-3 animate-pulse">
+          <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-blue-800">
+              Régénération automatique des packs en cours...
+            </p>
+            <p className="text-xs text-blue-600 mt-1">
+              Les packs se mettent à jour automatiquement suite à votre modification
+            </p>
+          </div>
+        </div>
+      )}
 
       {loading && inventaire.length === 0 ? (
         <div className="flex items-center justify-center py-12">

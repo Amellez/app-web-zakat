@@ -1,4 +1,4 @@
-import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, writeBatch, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
 import { genererPacksAutomatiques, normaliserArticleFavori } from './packCalculator';
 
@@ -32,7 +32,7 @@ export async function getInventaire() {
 }
 
 /**
- * Ajoute un article à l'inventaire
+ * Ajoute un article à l'inventaire et régénère automatiquement les packs
  */
 export async function ajouterArticleInventaire(article) {
   const docRef = await addDoc(collection(db, 'inventaire'), {
@@ -43,11 +43,20 @@ export async function ajouterArticleInventaire(article) {
     createdAt: new Date().toISOString()
   });
   
+  console.log('✅ Article ajouté, régénération automatique des packs...');
+  
+  // Régénération automatique des packs après ajout
+  try {
+    await genererEtSauvegarderPacks();
+  } catch (error) {
+    console.error('❌ Erreur lors de la régénération après ajout:', error);
+  }
+  
   return docRef.id;
 }
 
 /**
- * Met à jour un article de l'inventaire
+ * Met à jour un article de l'inventaire et régénère automatiquement les packs
  */
 export async function updateArticleInventaire(id, updates) {
   const docRef = doc(db, 'inventaire', id);
@@ -55,13 +64,31 @@ export async function updateArticleInventaire(id, updates) {
     ...updates,
     updatedAt: new Date().toISOString()
   });
+  
+  console.log('✅ Article mis à jour, régénération automatique des packs...');
+  
+  // Régénération automatique des packs après modification
+  try {
+    await genererEtSauvegarderPacks();
+  } catch (error) {
+    console.error('❌ Erreur lors de la régénération après modification:', error);
+  }
 }
 
 /**
- * Supprime un article de l'inventaire
+ * Supprime un article de l'inventaire et régénère automatiquement les packs
  */
 export async function supprimerArticleInventaire(id) {
   await deleteDoc(doc(db, 'inventaire', id));
+  
+  console.log('✅ Article supprimé, régénération automatique des packs...');
+  
+  // Régénération automatique des packs après suppression
+  try {
+    await genererEtSauvegarderPacks();
+  } catch (error) {
+    console.error('❌ Erreur lors de la régénération après suppression:', error);
+  }
 }
 
 /**
@@ -98,15 +125,20 @@ export async function getPacks() {
 }
 
 /**
- * Génère et sauvegarde automatiquement tous les packs
+ * 🔥 FONCTION PRINCIPALE : Génère et sauvegarde automatiquement tous les packs
+ * Cette fonction est appelée automatiquement après chaque modification de l'inventaire
  */
 export async function genererEtSauvegarderPacks() {
   try {
+    console.log('🔄 Début de la régénération automatique des packs...');
+    
     // 1. Récupérer l'inventaire et les bénéficiaires
     const inventaire = await getInventaire();
     const beneficiaires = await getBeneficiaires();
     
     console.log('📦 Génération des packs avec articles favoris...');
+    console.log(`   - Inventaire: ${inventaire.length} articles`);
+    console.log(`   - Bénéficiaires: ${beneficiaires.length} personnes`);
     
     // 2. Générer les packs avec le nouveau système
     const { packsStandard, packsSupplements } = genererPacksAutomatiques(inventaire, beneficiaires);
@@ -118,7 +150,7 @@ export async function genererEtSauvegarderPacks() {
     console.log(`🎁 Packs suppléments: ${packsSupplements.length}`);
     console.log(`✅ Total: ${tousLesPacks.length}`);
     
-    // 4. Supprimer les anciens packs
+    // 4. Supprimer les anciens packs (en batch)
     const anciensPacks = await getDocs(collection(db, 'packs'));
     const batch = writeBatch(db);
     
@@ -134,21 +166,25 @@ export async function genererEtSauvegarderPacks() {
     for (const pack of tousLesPacks) {
       const docRef = await addDoc(collection(db, 'packs'), {
         ...pack,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        generationAuto: true // Marqueur pour indiquer que c'est une génération automatique
       });
       packsIds.push(docRef.id);
     }
     
-    console.log('✅ Nouveaux packs sauvegardés');
+    console.log('✅ Nouveaux packs sauvegardés avec succès');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     
     return {
       success: true,
       message: `${tousLesPacks.length} packs générés avec succès (${packsStandard.length} standard + ${packsSupplements.length} suppléments)`,
-      packsGeneres: tousLesPacks.length
+      packsGeneres: tousLesPacks.length,
+      packsStandard: packsStandard.length,
+      packsSupplements: packsSupplements.length
     };
     
   } catch (error) {
-    console.error('Erreur génération packs:', error);
+    console.error('❌ Erreur génération packs:', error);
     return {
       success: false,
       message: error.message
@@ -283,6 +319,12 @@ export async function ajouterBeneficiaire(beneficiaire) {
       createdAt: new Date().toISOString()
     });
     
+    // Régénérer les packs si le bénéficiaire est validé
+    if (beneficiaire.statut === 'Validé') {
+      console.log('✅ Bénéficiaire validé ajouté, régénération des packs...');
+      await genererEtSauvegarderPacks();
+    }
+    
     return docRef.id;
   } catch (error) {
     handleFirebaseError(error, 'l\'ajout du bénéficiaire');
@@ -323,6 +365,17 @@ export async function updateBeneficiaire(id, beneficiaire) {
     
     await updateDoc(docRef, updates);
     
+    // Régénérer les packs si nécessaire (statut validé ou infos critiques changées)
+    const shouldRegenerate = 
+      beneficiaire.statut === 'Validé' || 
+      beneficiaireData?.statut === 'Validé' ||
+      infoCritiquesChangent;
+    
+    if (shouldRegenerate) {
+      console.log('✅ Bénéficiaire modifié, régénération des packs...');
+      await genererEtSauvegarderPacks();
+    }
+    
     return {
       success: true,
       packReinitialise: infoCritiquesChangent && (beneficiaireData?.packId || beneficiaireData?.packSupplementId)
@@ -337,10 +390,114 @@ export async function updateBeneficiaire(id, beneficiaire) {
  */
 export async function supprimerBeneficiaire(id) {
   try {
+    // Récupérer le bénéficiaire avant suppression
+    const beneficiaires = await getBeneficiaires();
+    const beneficiaire = beneficiaires.find(b => b.id === id);
+    
     await deleteDoc(doc(db, 'beneficiaires', id));
     console.log(`✅ Bénéficiaire ${id} supprimé`);
+    
+    // Régénérer les packs si le bénéficiaire était validé
+    if (beneficiaire && (beneficiaire.statut === 'Validé' || beneficiaire.statut === 'Pack Attribué')) {
+      console.log('✅ Bénéficiaire validé supprimé, régénération des packs...');
+      await genererEtSauvegarderPacks();
+    }
+    
     return { success: true };
   } catch (error) {
     handleFirebaseError(error, 'la suppression du bénéficiaire');
   }
+}
+
+/**
+ * 🎯 LISTENER EN TEMPS RÉEL : Écoute les changements de l'inventaire
+ * Retourne une fonction unsubscribe pour arrêter l'écoute
+ */
+export function ecouterInventaire(callback) {
+  console.log('👂 Installation du listener temps réel sur l\'inventaire');
+  
+  const unsubscribe = onSnapshot(
+    collection(db, 'inventaire'),
+    (snapshot) => {
+      const items = [];
+      snapshot.forEach((doc) => {
+        items.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+      
+      console.log('🔄 Inventaire mis à jour en temps réel:', items.length, 'articles');
+      
+      // Appeler le callback avec les données mises à jour
+      callback(items);
+    },
+    (error) => {
+      console.error('❌ Erreur listener inventaire:', error);
+    }
+  );
+  
+  return unsubscribe;
+}
+
+/**
+ * 🎯 LISTENER EN TEMPS RÉEL : Écoute les changements des packs
+ * Retourne une fonction unsubscribe pour arrêter l'écoute
+ */
+export function ecouterPacks(callback) {
+  console.log('👂 Installation du listener temps réel sur les packs');
+  
+  const unsubscribe = onSnapshot(
+    collection(db, 'packs'),
+    (snapshot) => {
+      const packs = [];
+      snapshot.forEach((doc) => {
+        packs.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+      
+      console.log('🔄 Packs mis à jour en temps réel:', packs.length, 'packs');
+      
+      // Appeler le callback avec les données mises à jour
+      callback(packs);
+    },
+    (error) => {
+      console.error('❌ Erreur listener packs:', error);
+    }
+  );
+  
+  return unsubscribe;
+}
+
+/**
+ * 🎯 LISTENER EN TEMPS RÉEL : Écoute les changements des bénéficiaires
+ * Retourne une fonction unsubscribe pour arrêter l'écoute
+ */
+export function ecouterBeneficiaires(callback) {
+  console.log('👂 Installation du listener temps réel sur les bénéficiaires');
+  
+  const unsubscribe = onSnapshot(
+    collection(db, 'beneficiaires'),
+    (snapshot) => {
+      const beneficiaires = [];
+      snapshot.forEach((doc) => {
+        beneficiaires.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+      
+      console.log('🔄 Bénéficiaires mis à jour en temps réel:', beneficiaires.length, 'personnes');
+      
+      // Appeler le callback avec les données mises à jour
+      callback(beneficiaires);
+    },
+    (error) => {
+      console.error('❌ Erreur listener bénéficiaires:', error);
+    }
+  );
+  
+  return unsubscribe;
 }

@@ -1,13 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sparkles, Loader2, AlertCircle, Trash2, Package, Gift } from 'lucide-react';
 import ModalGenererPacks from './ModalGenererPacks';
 import PackCard from './PackCard';
-import { getPacks, supprimerTousLesPacks } from '@/lib/firebaseAdmin';
+import { getPacks, supprimerTousLesPacks, ecouterPacks } from '@/lib/firebaseAdmin';
 
 export default function PacksTab({ packs, setPacks, inventaire, beneficiaires }) {
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // 🔥 Listener en temps réel sur les packs
+  useEffect(() => {
+    console.log('👂 Installation du listener temps réel sur les packs');
+    
+    const unsubscribe = ecouterPacks((packsData) => {
+      setPacks(packsData);
+      console.log('✅ Packs mis à jour automatiquement:', packsData.length);
+    });
+
+    return () => {
+      console.log('🔌 Déconnexion du listener packs');
+      unsubscribe();
+    };
+  }, [setPacks]);
 
   // Charger les packs depuis Firebase
   const chargerPacks = async () => {
