@@ -20,35 +20,35 @@ export default function InscriptionPage() {
     attestationVeracite: false,
     attestationIleDeFrance: false
   });
-  
+
   const [addressSelected, setAddressSelected] = useState(false);
-  
+
   const [status, setStatus] = useState({ type: '', message: '' });
   const [loading, setLoading] = useState(false);
   const [addressSuggestions, setAddressSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   // ✅ NOUVEL ÉTAT POUR LA MODALE DE SUCCÈS
-  const [showSuccessModal, setShowSuccessModal] = useState(false); 
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const articlesFavoris = [
-    { 
-      value: 'RIZ', 
-      label: 'Riz', 
+    {
+      value: 'RIZ',
+      label: 'Riz',
       emoji: '🍚',
-      description: 'Vous recevrez un supplément de riz dans votre pack' 
+      description: 'Vous recevrez un supplément de riz dans votre pack'
     },
-    { 
-      value: 'PÂTES', 
-      label: 'Pâtes', 
+    {
+      value: 'PÂTES',
+      label: 'Pâtes',
       emoji: '🍝',
-      description: 'Vous recevrez un supplément de pâtes dans votre pack' 
+      description: 'Vous recevrez un supplément de pâtes dans votre pack'
     },
-    { 
-      value: 'COUSCOUS', 
-      label: 'Couscous', 
+    {
+      value: 'COUSCOUS',
+      label: 'Couscous',
       emoji: '🥘',
-      description: 'Vous recevrez un supplément de couscous dans votre pack' 
+      description: 'Vous recevrez un supplément de couscous dans votre pack'
     }
   ];
 
@@ -88,7 +88,7 @@ export default function InscriptionPage() {
 
       // Filtrer pour garder uniquement Île-de-France (départements 75, 77, 78, 91, 92, 93, 94, 95)
       const idfDepartments = ['75', '77', '78', '91', '92', '93', '94', '95'];
-      
+
       const suggestions = data.features
         .filter(item => {
           const postcode = item.properties.postcode || '';
@@ -121,12 +121,12 @@ export default function InscriptionPage() {
   const handleAddressChange = (e) => {
     const value = e.target.value;
     handleChange(e);
-    
+
     // Annuler le timeout précédent
     if (window.addressTimeout) {
       clearTimeout(window.addressTimeout);
     }
-    
+
     // Attendre 500ms après que l'utilisateur ait fini de taper
     window.addressTimeout = setTimeout(() => {
       searchAddress(value);
@@ -169,7 +169,7 @@ export default function InscriptionPage() {
       }
 
       // ✅ Validation stricte des attestations
-      if (!formData.attestationMusulman || !formData.attestationBesoin || 
+      if (!formData.attestationMusulman || !formData.attestationBesoin ||
           !formData.attestationVeracite || !formData.attestationIleDeFrance) {
         throw new Error('Vous devez cocher toutes les attestations obligatoires pour continuer');
       }
@@ -249,7 +249,7 @@ export default function InscriptionPage() {
           <p className="text-lg text-gray-600 mb-6">
             Jazakoum Allahu Khayran.
           </p>
-          
+
           <div className="bg-emerald-50 border-l-4 border-emerald-500 p-4 mb-8 text-left">
             <p className="text-sm font-medium text-emerald-800">
               Votre demande a bien été enregistrée.
@@ -293,7 +293,7 @@ export default function InscriptionPage() {
         <div className="bg-white rounded-2xl shadow-2xl p-8 md:p-12 border-2 border-gray-100">
           <div className="space-y-6">
             {/* ... Tous les champs du formulaire restent ici ... */}
-            
+
              {/* Nom Complet */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -305,7 +305,7 @@ export default function InscriptionPage() {
                 value={formData.nom}
                 onChange={handleChange}
                 placeholder="Ex: Ahmed Ben Mohamed"
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-emerald-500 focus:outline-none transition"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg text-gray-900 focus:border-emerald-500 focus:outline-none transition"
               />
             </div>
 
@@ -363,7 +363,7 @@ export default function InscriptionPage() {
                   value={formData.email}
                   onChange={handleChange}
                   placeholder="email@exemple.com"
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-emerald-500 focus:outline-none transition"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg text-gray-900 focus:border-emerald-500 focus:outline-none transition"
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Vous recevrez une confirmation avec le jour et l'horaire de livraison
@@ -380,7 +380,7 @@ export default function InscriptionPage() {
                   value={formData.telephone}
                   onChange={handleChange}
                   placeholder="06 12 34 56 78"
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-emerald-500 focus:outline-none transition"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg text-gray-900 focus:border-emerald-500 focus:outline-none transition"
                 />
               </div>
             </div>
@@ -397,7 +397,7 @@ export default function InscriptionPage() {
                 onChange={handleAddressChange}
                 onFocus={() => setShowSuggestions(addressSuggestions.length > 0)}
                 placeholder="Commencez à taper votre adresse..."
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-emerald-500 focus:outline-none transition"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg text-gray-900 focus:border-emerald-500 focus:outline-none transition"
                 autoComplete="off"
                 disabled={addressSelected}
               />
@@ -413,7 +413,7 @@ export default function InscriptionPage() {
                   'Tapez au moins 3 caractères pour voir les suggestions.'
                 )}
               </p>
-              
+
               {/* Liste des suggestions */}
               {showSuggestions && addressSuggestions.length > 0 && (
                 <div className="absolute z-10 w-full mt-1 bg-white border-2 border-emerald-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
@@ -434,7 +434,7 @@ export default function InscriptionPage() {
                   ))}
                 </div>
               )}
-              
+
               {/* Message si pas de résultats */}
               {showSuggestions && addressSuggestions.length === 0 && !loadingSuggestions && formData.adresse.length >= 3 && (
                 <div className="absolute z-10 w-full mt-1 bg-yellow-50 border-2 border-yellow-200 rounded-lg shadow-lg p-4">
@@ -459,7 +459,7 @@ export default function InscriptionPage() {
                     </p>
                   </div>
                 </div>
-                
+
                 <input
                   type="text"
                   name="adresseCorrigee"
@@ -468,7 +468,7 @@ export default function InscriptionPage() {
                   placeholder="Entrez l'adresse corrigée (optionnel)"
                   className="w-full px-4 py-3 border-2 border-blue-300 rounded-lg focus:border-blue-500 focus:outline-none transition bg-white"
                 />
-                
+
                 <button
                   type="button"
                   onClick={() => {
@@ -493,7 +493,7 @@ export default function InscriptionPage() {
                 value={formData.complementAdresse}
                 onChange={handleChange}
                 placeholder="Ex: Bâtiment B, 3ème étage, Porte 12, Code 1234A"
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-emerald-500 focus:outline-none transition"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg text-gray-900 focus:border-emerald-500 focus:outline-none transition"
               />
               <p className="text-xs text-gray-500 mt-1">
                 Informations complémentaires pour faciliter la livraison
@@ -512,7 +512,7 @@ export default function InscriptionPage() {
                 onChange={handleChange}
                 min="1"
                 placeholder="Ex: 5"
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-emerald-500 focus:outline-none transition"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg text-gray-900 focus:border-emerald-500 focus:outline-none transition"
               />
             </div>
 
@@ -525,7 +525,7 @@ export default function InscriptionPage() {
                 <span className="text-red-600">*</span>
                 Attestations sur l'honneur (obligatoires)
               </h3>
-              
+
               <label className="flex items-start gap-3 cursor-pointer group">
                 <input
                   type="checkbox"
@@ -614,7 +614,7 @@ export default function InscriptionPage() {
           {/* Note en bas */}
           <div className="mt-6 p-4 bg-blue-50 rounded-lg">
             <p className="text-sm text-blue-800">
-              ℹ️ <strong>Important:</strong> Votre inscription sera vérifiée par nos équipes. 
+              ℹ️ <strong>Important:</strong> Votre inscription sera vérifiée par nos équipes.
               Vous recevrez un email de confirmation avec le jour et l'horaire précis de livraison.
             </p>
           </div>
