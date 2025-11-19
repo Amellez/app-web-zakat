@@ -6,6 +6,7 @@ export default function CarteItineraires({ itineraires }) {
   const mapContainer = useRef(null);
   const mapInstance = useRef(null);
   const [error, setError] = useState(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
 
   useEffect(() => {
     // Charger Leaflet dynamiquement côté client uniquement
@@ -13,6 +14,9 @@ export default function CarteItineraires({ itineraires }) {
 
     // Vérifier si déjà chargé
     if (mapInstance.current) return;
+
+    // Vérifier que le conteneur existe
+    if (!mapContainer.current) return;
 
     // Fonction pour initialiser la carte
     const initMap = async () => {
@@ -22,6 +26,14 @@ export default function CarteItineraires({ itineraires }) {
 
         // Importer les CSS de Leaflet
         await import('leaflet/dist/leaflet.css');
+
+        // Attendre un peu pour s'assurer que le DOM est prêt
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Vérifier à nouveau que le conteneur existe
+        if (!mapContainer.current) {
+          throw new Error('Conteneur de carte non disponible');
+        }
 
         // Fix pour les icônes par défaut de Leaflet avec Next.js
         delete L.Icon.Default.prototype._getIconUrl;
@@ -47,8 +59,17 @@ export default function CarteItineraires({ itineraires }) {
           }
         }
 
+        // Nettoyer toute instance précédente
+        if (mapContainer.current._leaflet_id) {
+          mapContainer.current._leaflet_id = undefined;
+        }
+
         // Créer la carte
-        const map = L.map(mapContainer.current).setView([centerLat, centerLng], zoom);
+        const map = L.map(mapContainer.current, {
+          center: [centerLat, centerLng],
+          zoom: zoom,
+          scrollWheelZoom: true
+        });
 
         // Ajouter la couche OpenStreetMap
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -86,7 +107,7 @@ export default function CarteItineraires({ itineraires }) {
                 border: 3px solid white;
                 display: flex;
                 align-items: center;
-                justify-center: center;
+                justify-content: center;
                 font-weight: bold;
                 font-size: 14px;
                 box-shadow: 0 3px 6px rgba(0,0,0,0.3);
@@ -158,11 +179,17 @@ export default function CarteItineraires({ itineraires }) {
           map.fitBounds(bounds, { padding: [50, 50] });
         }
 
+        // Forcer un refresh de la carte après un court délai
+        setTimeout(() => {
+          map.invalidateSize();
+        }, 200);
+
         mapInstance.current = map;
+        setMapLoaded(true);
 
       } catch (err) {
         console.error('Erreur initialisation carte:', err);
-        setError('Impossible de charger la carte');
+        setError('Impossible de charger la carte: ' + err.message);
       }
     };
 
@@ -183,6 +210,12 @@ export default function CarteItineraires({ itineraires }) {
         <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
         <h3 className="text-xl font-bold text-gray-800 mb-2">Erreur de chargement</h3>
         <p className="text-gray-600">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-4 px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+        >
+          Recharger la page
+        </button>
       </div>
     );
   }
@@ -214,10 +247,21 @@ export default function CarteItineraires({ itineraires }) {
       </div>
 
       {/* Carte */}
-      <div
-        ref={mapContainer}
-        className="w-full h-[600px] rounded-lg shadow-lg border-2 border-gray-200 overflow-hidden"
-      />
+      <div className="bg-white rounded-lg shadow-lg border-2 border-gray-200 overflow-hidden">
+        {!mapLoaded && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75 z-10">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Chargement de la carte...</p>
+            </div>
+          </div>
+        )}
+        <div
+          ref={mapContainer}
+          className="w-full h-[600px]"
+          style={{ minHeight: '600px' }}
+        />
+      </div>
     </div>
   );
 }
