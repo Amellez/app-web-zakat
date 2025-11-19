@@ -50,17 +50,17 @@ function ProfileMenu() {
       {showMenu && (
         <>
           {/* Overlay pour fermer le menu en cliquant ailleurs */}
-          <div 
-            className="fixed inset-0 z-10" 
+          <div
+            className="fixed inset-0 z-10"
             onClick={() => setShowMenu(false)}
           />
-          
+
           <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-20">
             <div className="p-4 bg-gradient-to-r from-emerald-50 to-teal-50 border-b">
               <p className="text-sm font-medium text-gray-900">Connecté en tant que</p>
               <p className="text-xs text-gray-600 truncate">{user?.email}</p>
             </div>
-            
+
             <div className="p-2">
               <button
                 onClick={() => {
@@ -157,7 +157,7 @@ export default function AdminDashboard() {
                 Système de gestion complet
               </p>
             </div>
-            
+
             {/* Menu utilisateur avec dropdown */}
             <ProfileMenu />
           </div>
@@ -212,7 +212,9 @@ export default function AdminDashboard() {
             beneficiaires={beneficiaires}
           />
         )}
-        {activeTab === "itineraires" && <ItinerairesTab />}
+        {activeTab === "itineraires" && (
+        <ItinerairesTab beneficiaires={beneficiaires} />
+        )}
       </div>
     </div>
   );
