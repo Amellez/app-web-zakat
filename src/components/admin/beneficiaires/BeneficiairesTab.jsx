@@ -5,7 +5,7 @@ import SearchAndFilter from '../ui/SearchAndFilter';
 import BeneficiaireRow from './BeneficiaireRow';
 import ModalAjouterBeneficiaire from './ModalAjouterBeneficiaire';
 import ModalModifierBeneficiaire from './ModalModifierBeneficiaire';
-import { getBeneficiaires, updateBeneficiaireStatut } from '@/lib/firebaseAdmin';
+import { getBeneficiaires, updateBeneficiaireStatut, supprimerBeneficiaire } from '@/lib/firebaseAdmin';
 
 export default function BeneficiairesTab({ beneficiaires, setBeneficiaires }) {
   const [showAddForm, setShowAddForm] = useState(false);
@@ -62,6 +62,20 @@ export default function BeneficiairesTab({ beneficiaires, setBeneficiaires }) {
   const handleEdit = (beneficiaire) => {
     setBeneficiaireToEdit(beneficiaire);
     setShowEditForm(true);
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce bénéficiaire ? Cette action est irréversible.')) {
+      return;
+    }
+    
+    try {
+      await supprimerBeneficiaire(id);
+      setBeneficiaires(prev => prev.filter(b => b.id !== id));
+    } catch (error) {
+      console.error('Erreur suppression:', error);
+      alert('Erreur lors de la suppression');
+    }
   };
 
   const handleAddSuccess = () => {
@@ -189,6 +203,7 @@ export default function BeneficiairesTab({ beneficiaires, setBeneficiaires }) {
                       onValidate={handleValidate}
                       onReject={handleReject}
                       onEdit={handleEdit}
+                      onDelete={handleDelete}
                     />
                   ))
                 )}

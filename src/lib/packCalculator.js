@@ -10,8 +10,8 @@
 // Définition des tailles de famille
 export const TAILLES_FAMILLE = ['Petite', 'Moyenne', 'Grande'];
 
-// Coefficients par taille de famille
-export const COEFFICIENTS = {
+// Coefficients par défaut (peuvent être surchargés par les paramètres de configuration)
+export const COEFFICIENTS_DEFAUT = {
   'Petite': 1,
   'Moyenne': 2,
   'Grande': 3
@@ -69,20 +69,29 @@ export function isArticleFavori(nomArticle) {
 }
 
 /**
- * Calcule la distribution d'un article favori (70% + 30%)
+ * Calcule la distribution d'un article favori avec des pourcentages configurables
+ * @param {number} quantiteTotale - Quantité totale disponible
+ * @param {number} pourcentageStandard - Pourcentage pour les packs standard (défaut: 70)
+ * @returns {Object} { standard, supplement }
  */
-export function calculerDistributionArticleFavori(quantiteTotale) {
+export function calculerDistributionArticleFavori(quantiteTotale, pourcentageStandard = 70) {
+  const standard = quantiteTotale * (pourcentageStandard / 100);
+  const supplement = quantiteTotale * ((100 - pourcentageStandard) / 100);
+  
   return {
-    standard: quantiteTotale * 0.7,
-    supplement: quantiteTotale * 0.3
+    standard,
+    supplement
   };
 }
 
 /**
  * Répartit une quantité selon les coefficients
+ * @param {number} quantiteTotale - Quantité totale à répartir
+ * @param {Object} nombreFamillesParTaille - Nombre de familles par taille
+ * @param {Object} coefficients - Coefficients personnalisés (optionnel)
  * @returns {Object} Distribution par taille avec quantité par famille
  */
-export function repartirSelonCoefficients(quantiteTotale, nombreFamillesParTaille) {
+export function repartirSelonCoefficients(quantiteTotale, nombreFamillesParTaille, coefficients = COEFFICIENTS_DEFAUT) {
   const distribution = {};
   
   // Calculer le total des parts
@@ -91,7 +100,7 @@ export function repartirSelonCoefficients(quantiteTotale, nombreFamillesParTaill
   for (const taille of TAILLES_FAMILLE) {
     const nbFamilles = nombreFamillesParTaille[taille] || 0;
     if (nbFamilles > 0) {
-      const coef = COEFFICIENTS[taille];
+      const coef = coefficients[taille] || COEFFICIENTS_DEFAUT[taille];
       totalParts += nbFamilles * coef;
     }
   }
@@ -106,7 +115,7 @@ export function repartirSelonCoefficients(quantiteTotale, nombreFamillesParTaill
   for (const taille of TAILLES_FAMILLE) {
     const nbFamilles = nombreFamillesParTaille[taille] || 0;
     if (nbFamilles > 0) {
-      const coef = COEFFICIENTS[taille];
+      const coef = coefficients[taille] || COEFFICIENTS_DEFAUT[taille];
       const quantiteParFamille = quantiteParPart * coef;
       
       distribution[taille] = {
@@ -143,11 +152,24 @@ export function repartirEquitablement(quantiteTotale, nombreFamillesTotal) {
 }
 
 /**
- * Génère tous les packs automatiquement
- * Retourne : { packsStandard: [], packsSupplements: [] }
+ * Génère tous les packs automatiquement avec paramètres configurables
+ * @param {Array} inventaire - Liste des articles de l'inventaire
+ * @param {Array} beneficiaires - Liste des bénéficiaires
+ * @param {Object} parametres - Paramètres de configuration (optionnel)
+ * @returns {Object} { packsStandard: [], packsSupplements: [] }
  */
-export function genererPacksAutomatiques(inventaire, beneficiaires) {
+export function genererPacksAutomatiques(inventaire, beneficiaires, parametres = null) {
   console.log('🚀 Début génération packs avec articles favoris');
+  
+  // Utiliser les paramètres fournis ou les valeurs par défaut
+  const pourcentageStandard = parametres?.repartition?.standard || 70;
+  const coefficients = parametres?.coefficients || COEFFICIENTS_DEFAUT;
+  
+  console.log('⚙️ Paramètres utilisés:', {
+    pourcentageStandard,
+    pourcentageSupplement: 100 - pourcentageStandard,
+    coefficients
+  });
   
   const packsStandard = [];
   const packsSupplements = [];
@@ -209,21 +231,21 @@ export function genererPacksAutomatiques(inventaire, beneficiaires) {
       const isFavori = isArticleFavori(article.nom);
       
       if (isFavori) {
-        // Articles favoris : 70% avec coefficient
-        const { standard } = calculerDistributionArticleFavori(article.quantite);
-        const distStandard = repartirSelonCoefficients(standard, nombreFamillesParTaille);
+        // Articles favoris : pourcentage configurable avec coefficient
+        const { standard } = calculerDistributionArticleFavori(article.quantite, pourcentageStandard);
+        const distStandard = repartirSelonCoefficients(standard, nombreFamillesParTaille, coefficients);
         
         if (distStandard[taille]) {
           pack.composition.push({
             produit: article.nom,
             quantiteParFamille: distStandard[taille].quantiteParFamille,
             unite: article.unite,
-            type: 'standard-70%'
+            type: `standard-${pourcentageStandard}%`
           });
         }
       } else {
         // Autres articles : 100% avec coefficient
-        const distribution = repartirSelonCoefficients(article.quantite, nombreFamillesParTaille);
+        const distribution = repartirSelonCoefficients(article.quantite, nombreFamillesParTaille, coefficients);
         
         if (distribution[taille]) {
           pack.composition.push({
@@ -257,9 +279,9 @@ export function genererPacksAutomatiques(inventaire, beneficiaires) {
     // Trouver l'article correspondant dans l'inventaire
     inventaire.forEach(article => {
       if (matchArticleFavori(article.nom, articleFavori)) {
-        const { supplement } = calculerDistributionArticleFavori(article.quantite);
+        const { supplement } = calculerDistributionArticleFavori(article.quantite, pourcentageStandard);
         
-        // Distribution équitable (30%) sans coefficient
+        // Distribution équitable (pourcentage restant) sans coefficient
         const distSupplement = repartirEquitablement(supplement, nbFamillesConcernees);
         
         pack.composition.push({
@@ -267,7 +289,7 @@ export function genererPacksAutomatiques(inventaire, beneficiaires) {
           quantiteParFamille: distSupplement.quantiteParFamille,
           quantiteTotale: distSupplement.quantiteTotale,
           unite: article.unite,
-          type: 'supplement-30%'
+          type: `supplement-${100 - pourcentageStandard}%`
         });
       }
     });
