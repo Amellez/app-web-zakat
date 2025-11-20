@@ -1,9 +1,9 @@
 import React from 'react';
-import { CheckCircle, XCircle, Edit } from 'lucide-react';
+import { CheckCircle, XCircle, Edit, Trash2 } from 'lucide-react';
 import StatutBadge from '../ui/StatutBadge';
 import SourceBadge from '../ui/SourceBadge';
 
-export default function BeneficiaireRow({ beneficiaire, onValidate, onReject, onEdit }) {
+export default function BeneficiaireRow({ beneficiaire, onValidate, onReject, onEdit, onDelete }) {
   // Emojis pour les articles favoris
   const articleEmojis = {
     'RIZ': '🍚',
@@ -75,6 +75,13 @@ export default function BeneficiaireRow({ beneficiaire, onValidate, onReject, on
             title="Modifier"
           >
             <Edit className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => onDelete(beneficiaire.id)}
+            className="p-2 text-red-600 hover:bg-red-50 rounded transition"
+            title="Supprimer"
+          >
+            <Trash2 className="w-5 h-5" />
           </button>
         </div>
       </td>
