@@ -85,18 +85,24 @@ export function calculerDistributionArticleFavori(quantiteTotale, pourcentageSta
 }
 
 /**
- * Répartit une quantité selon les coefficients
+ * Répartit une quantité selon les coefficients AVEC redistribution des restes
  * @param {number} quantiteTotale - Quantité totale à répartir
  * @param {Object} nombreFamillesParTaille - Nombre de familles par taille
  * @param {Object} coefficients - Coefficients personnalisés (optionnel)
- * @returns {Object} Distribution par taille avec quantité par famille
+ * @returns {Object} { distribution: {...}, resteNonDistribue: number }
  */
-export function repartirSelonCoefficients(quantiteTotale, nombreFamillesParTaille, coefficients = COEFFICIENTS_DEFAUT) {
+export function repartirAvecRedistribution(quantiteTotale, nombreFamillesParTaille, coefficients = COEFFICIENTS_DEFAUT) {
   const distribution = {};
+  const restesParPack = [];
   
-  // Calculer le total des parts
+  console.log('📊 repartirAvecRedistribution appelée avec:', {
+    quantiteTotale,
+    nombreFamillesParTaille,
+    coefficients
+  });
+  
+  // Étape 1 : Calculer le total des parts
   let totalParts = 0;
-  
   for (const taille of TAILLES_FAMILLE) {
     const nbFamilles = nombreFamillesParTaille[taille] || 0;
     if (nbFamilles > 0) {
@@ -106,26 +112,82 @@ export function repartirSelonCoefficients(quantiteTotale, nombreFamillesParTaill
   }
   
   if (totalParts === 0) {
-    return distribution;
+    return { distribution: {}, resteNonDistribue: quantiteTotale };
   }
   
   const quantiteParPart = quantiteTotale / totalParts;
+  console.log(`   Total parts: ${totalParts}, Quantité par part: ${quantiteParPart.toFixed(4)}`);
   
-  // Calculer pour chaque taille
+  // Étape 2 : Calculer pour chaque taille avec arrondi inférieur
+  let totalDistribue = 0;
+  
   for (const taille of TAILLES_FAMILLE) {
     const nbFamilles = nombreFamillesParTaille[taille] || 0;
     if (nbFamilles > 0) {
       const coef = coefficients[taille] || COEFFICIENTS_DEFAUT[taille];
-      const quantiteParFamille = quantiteParPart * coef;
+      const quantiteTheoriqueParFamille = quantiteParPart * coef;
+      const quantiteArrondie = Math.floor(quantiteTheoriqueParFamille); // Arrondi inférieur
+      const resteParFamille = quantiteTheoriqueParFamille - quantiteArrondie;
+      const resteTotalPack = resteParFamille * nbFamilles;
       
       distribution[taille] = {
-        quantiteParFamille: Math.round(quantiteParFamille * 100) / 100,
+        quantiteParFamille: quantiteArrondie,
         nombreFamilles: nbFamilles,
-        quantiteTotale: Math.round(quantiteParFamille * nbFamilles * 100) / 100
+        quantiteTotale: quantiteArrondie * nbFamilles,
+        resteParFamille: resteParFamille,
+        resteTotalPack: resteTotalPack
       };
+      
+      totalDistribue += quantiteArrondie * nbFamilles;
+      
+      // Garder trace des restes pour redistribution
+      restesParPack.push({
+        taille: taille,
+        resteTotalPack: resteTotalPack,
+        nbFamilles: nbFamilles
+      });
+      
+      console.log(`   ${taille}: ${quantiteArrondie}kg/famille (reste: ${resteParFamille.toFixed(4)}kg × ${nbFamilles} = ${resteTotalPack.toFixed(2)}kg)`);
     }
   }
   
+  // Étape 3 : Redistribuer les restes
+  let resteDisponible = quantiteTotale - totalDistribue;
+  console.log(`   💰 Reste disponible pour redistribution: ${resteDisponible.toFixed(2)}kg`);
+  
+  // Trier les packs par reste décroissant
+  restesParPack.sort((a, b) => b.resteTotalPack - a.resteTotalPack);
+  
+  for (const packInfo of restesParPack) {
+    // Peut-on donner +1kg par famille à ce pack ?
+    const besoinPourBonus = packInfo.nbFamilles * 1; // 1kg par famille
+    
+    if (resteDisponible >= besoinPourBonus) {
+      console.log(`   🎁 Pack ${packInfo.taille}: +1kg par famille (${besoinPourBonus}kg distribués)`);
+      distribution[packInfo.taille].quantiteParFamille += 1;
+      distribution[packInfo.taille].quantiteTotale += besoinPourBonus;
+      resteDisponible -= besoinPourBonus;
+      totalDistribue += besoinPourBonus;
+    }
+  }
+  
+  console.log(`   ✅ Distribution finale: ${totalDistribue.toFixed(2)}kg distribués, ${resteDisponible.toFixed(2)}kg restants`);
+  
+  return {
+    distribution: distribution,
+    resteNonDistribue: resteDisponible
+  };
+}
+
+/**
+ * Répartit une quantité selon les coefficients (ANCIENNE VERSION - gardée pour compatibilité)
+ * @param {number} quantiteTotale - Quantité totale à répartir
+ * @param {Object} nombreFamillesParTaille - Nombre de familles par taille
+ * @param {Object} coefficients - Coefficients personnalisés (optionnel)
+ * @returns {Object} Distribution par taille avec quantité par famille
+ */
+export function repartirSelonCoefficients(quantiteTotale, nombreFamillesParTaille, coefficients = COEFFICIENTS_DEFAUT) {
+  const { distribution } = repartirAvecRedistribution(quantiteTotale, nombreFamillesParTaille, coefficients);
   return distribution;
 }
 
@@ -160,6 +222,7 @@ export function repartirEquitablement(quantiteTotale, nombreFamillesTotal) {
  */
 export function genererPacksAutomatiques(inventaire, beneficiaires, parametres = null) {
   console.log('🚀 Début génération packs avec articles favoris');
+  console.log('📥 PARAMETRES REÇUS:', parametres);
   
   // Utiliser les paramètres fournis ou les valeurs par défaut
   const pourcentageStandard = parametres?.repartition?.standard || 70;
@@ -170,9 +233,18 @@ export function genererPacksAutomatiques(inventaire, beneficiaires, parametres =
     pourcentageSupplement: 100 - pourcentageStandard,
     coefficients
   });
+  console.log('🔍 COEFFICIENTS DETAILS:', {
+    Petite: coefficients.Petite,
+    Moyenne: coefficients.Moyenne,
+    Grande: coefficients.Grande
+  });
   
   const packsStandard = [];
   const packsSupplements = [];
+  const packBonus = {
+    type: 'bonus',
+    composition: []
+  };
   
   // 1. Compter les familles par taille
   const nombreFamillesParTaille = {
@@ -231,21 +303,76 @@ export function genererPacksAutomatiques(inventaire, beneficiaires, parametres =
       const isFavori = isArticleFavori(article.nom);
       
       if (isFavori) {
-        // Articles favoris : pourcentage configurable avec coefficient
-        const { standard } = calculerDistributionArticleFavori(article.quantite, pourcentageStandard);
-        const distStandard = repartirSelonCoefficients(standard, nombreFamillesParTaille, coefficients);
+        // Déterminer quel article favori correspond
+        let articleFavoriType = null;
+        ARTICLES_FAVORIS.forEach(favori => {
+          if (matchArticleFavori(article.nom, favori)) {
+            articleFavoriType = favori;
+          }
+        });
         
-        if (distStandard[taille]) {
-          pack.composition.push({
-            produit: article.nom,
-            quantiteParFamille: distStandard[taille].quantiteParFamille,
-            unite: article.unite,
-            type: `standard-${pourcentageStandard}%`
-          });
+        // Vérifier si quelqu'un a choisi cet article favori
+        const nbFamillesAvecCetArticle = articleFavoriType ? (famillesParArticleFavori[articleFavoriType] || 0) : 0;
+        
+        if (nbFamillesAvecCetArticle > 0) {
+          // ✅ Des familles ont choisi cet article → Distribution 70/30
+          console.log(`   📦 ${article.nom}: ${nbFamillesAvecCetArticle} familles ont choisi → ${pourcentageStandard}% standard`);
+          const { standard } = calculerDistributionArticleFavori(article.quantite, pourcentageStandard);
+          const { distribution: distStandard, resteNonDistribue } = repartirAvecRedistribution(standard, nombreFamillesParTaille, coefficients);
+          
+          if (distStandard[taille]) {
+            pack.composition.push({
+              produit: article.nom,
+              quantiteParFamille: distStandard[taille].quantiteParFamille,
+              unite: article.unite,
+              type: `standard-${pourcentageStandard}%`
+            });
+          }
+          
+          // Accumuler le reste dans le pack bonus
+          if (resteNonDistribue > 0) {
+            const existingBonus = packBonus.composition.find(item => item.produit === article.nom);
+            if (existingBonus) {
+              existingBonus.quantite += resteNonDistribue;
+            } else {
+              packBonus.composition.push({
+                produit: article.nom,
+                quantite: resteNonDistribue,
+                unite: article.unite
+              });
+            }
+          }
+        } else {
+          // ❌ Personne n'a choisi cet article → Distribution 100%
+          console.log(`   📦 ${article.nom}: Personne n'a choisi → 100% standard`);
+          const { distribution, resteNonDistribue } = repartirAvecRedistribution(article.quantite, nombreFamillesParTaille, coefficients);
+          
+          if (distribution[taille]) {
+            pack.composition.push({
+              produit: article.nom,
+              quantiteParFamille: distribution[taille].quantiteParFamille,
+              unite: article.unite,
+              type: 'standard-100% (aucun choix)'
+            });
+          }
+          
+          // Accumuler le reste dans le pack bonus
+          if (resteNonDistribue > 0) {
+            const existingBonus = packBonus.composition.find(item => item.produit === article.nom);
+            if (existingBonus) {
+              existingBonus.quantite += resteNonDistribue;
+            } else {
+              packBonus.composition.push({
+                produit: article.nom,
+                quantite: resteNonDistribue,
+                unite: article.unite
+              });
+            }
+          }
         }
       } else {
-        // Autres articles : 100% avec coefficient
-        const distribution = repartirSelonCoefficients(article.quantite, nombreFamillesParTaille, coefficients);
+        // Autres articles : 100% avec coefficient et redistribution
+        const { distribution, resteNonDistribue } = repartirAvecRedistribution(article.quantite, nombreFamillesParTaille, coefficients);
         
         if (distribution[taille]) {
           pack.composition.push({
@@ -255,6 +382,20 @@ export function genererPacksAutomatiques(inventaire, beneficiaires, parametres =
             type: 'standard-100%'
           });
         }
+        
+        // Accumuler le reste dans le pack bonus
+        if (resteNonDistribue > 0) {
+          const existingBonus = packBonus.composition.find(item => item.produit === article.nom);
+          if (existingBonus) {
+            existingBonus.quantite += resteNonDistribue;
+          } else {
+            packBonus.composition.push({
+              produit: article.nom,
+              quantite: resteNonDistribue,
+              unite: article.unite
+            });
+          }
+        }
       }
     });
     
@@ -263,7 +404,7 @@ export function genererPacksAutomatiques(inventaire, beneficiaires, parametres =
     }
   }
   
-  // 4. GÉNÉRER LES PACKS SUPPLÉMENTS (par article favori)
+  // 4. GÉNÉRER LES PACKS SUPPLÉMENTS (par article favori) avec redistribution
   ARTICLES_FAVORIS.forEach(articleFavori => {
     const nbFamillesConcernees = famillesParArticleFavori[articleFavori];
     
@@ -281,16 +422,47 @@ export function genererPacksAutomatiques(inventaire, beneficiaires, parametres =
       if (matchArticleFavori(article.nom, articleFavori)) {
         const { supplement } = calculerDistributionArticleFavori(article.quantite, pourcentageStandard);
         
-        // Distribution équitable (pourcentage restant) sans coefficient
-        const distSupplement = repartirEquitablement(supplement, nbFamillesConcernees);
+        // Distribution équitable avec arrondi et redistribution
+        const quantiteParPersonne = supplement / nbFamillesConcernees;
+        const quantiteArrondie = Math.floor(quantiteParPersonne);
+        const resteParPersonne = quantiteParPersonne - quantiteArrondie;
+        let totalDistribue = quantiteArrondie * nbFamillesConcernees;
+        let resteDisponible = supplement - totalDistribue;
+        
+        console.log(`   🎁 Supplément ${article.nom}: ${supplement.toFixed(2)}kg pour ${nbFamillesConcernees} personnes`);
+        console.log(`      → ${quantiteArrondie}kg/personne, reste: ${resteDisponible.toFixed(2)}kg`);
+        
+        // Redistribuer les kilos entiers aux bénéficiaires
+        let nbBonus = Math.floor(resteDisponible);
+        if (nbBonus > 0) {
+          console.log(`      → ${nbBonus} personne(s) reçoivent +1kg`);
+          totalDistribue += nbBonus;
+          resteDisponible -= nbBonus;
+        }
         
         pack.composition.push({
           produit: article.nom,
-          quantiteParFamille: distSupplement.quantiteParFamille,
-          quantiteTotale: distSupplement.quantiteTotale,
+          quantiteParFamille: quantiteArrondie,
+          quantiteTotale: totalDistribue,
           unite: article.unite,
-          type: `supplement-${100 - pourcentageStandard}%`
+          type: `supplement-${100 - pourcentageStandard}%`,
+          noteRedistribution: nbBonus > 0 ? `${nbBonus} bénéficiaire(s) reçoivent +1kg` : null
         });
+        
+        // Accumuler le reste dans le pack bonus
+        if (resteDisponible > 0) {
+          console.log(`      → Reste pour bonus: ${resteDisponible.toFixed(2)}kg`);
+          const existingBonus = packBonus.composition.find(item => item.produit === article.nom);
+          if (existingBonus) {
+            existingBonus.quantite += resteDisponible;
+          } else {
+            packBonus.composition.push({
+              produit: article.nom,
+              quantite: resteDisponible,
+              unite: article.unite
+            });
+          }
+        }
       }
     });
     
@@ -299,8 +471,24 @@ export function genererPacksAutomatiques(inventaire, beneficiaires, parametres =
     }
   });
   
+  // 5. Ajouter le pack bonus s'il contient des articles
+  if (packBonus.composition.length > 0) {
+    // Arrondir les quantités du pack bonus à 2 décimales
+    packBonus.composition.forEach(item => {
+      item.quantite = Math.round(item.quantite * 100) / 100;
+    });
+    
+    const totalBonus = packBonus.composition.reduce((sum, item) => sum + item.quantite, 0);
+    packBonus.quantiteTotale = Math.round(totalBonus * 100) / 100;
+    packBonus.note = 'Restes à distribuer en priorité ou premier arrivé';
+    
+    console.log(`📦 Pack Bonus créé avec ${packBonus.composition.length} articles (${packBonus.quantiteTotale.toFixed(2)}kg total)`);
+    packsSupplements.push(packBonus);
+  }
+  
   console.log(`✅ Packs standard générés: ${packsStandard.length}`);
-  console.log(`✅ Packs suppléments générés: ${packsSupplements.length}`);
+  console.log(`✅ Packs suppléments générés: ${packsSupplements.length - (packBonus.composition.length > 0 ? 1 : 0)}`);
+  console.log(`✅ Pack bonus: ${packBonus.composition.length > 0 ? 'OUI' : 'NON'}`);
   
   return {
     packsStandard,

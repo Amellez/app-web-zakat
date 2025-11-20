@@ -3,15 +3,19 @@ import { Sparkles, Loader2, AlertCircle, Trash2, Package, Gift } from 'lucide-re
 import ModalGenererPacks from './ModalGenererPacks';
 import PackCard from './PackCard';
 import { getPacks, supprimerTousLesPacks, ecouterPacks } from '@/lib/firebaseAdmin';
+import { getParametres } from '@/lib/parametresconfig';
 
 export default function PacksTab({ packs, setPacks, inventaire, beneficiaires }) {
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [parametres, setParametres] = useState(null);
+  const [parametresModifies, setParametresModifies] = useState(false);
+  const [derniersParametres, setDerniersParametres] = useState(null);
 
   // 🔥 Listener en temps réel sur les packs
   useEffect(() => {
-    console.log('👂 Installation du listener temps réel sur les packs');
+    console.log('🎧 Installation du listener temps réel sur les packs');
     
     const unsubscribe = ecouterPacks((packsData) => {
       setPacks(packsData);
@@ -23,6 +27,22 @@ export default function PacksTab({ packs, setPacks, inventaire, beneficiaires })
       unsubscribe();
     };
   }, [setPacks]);
+
+  // 🔥 Charger les paramètres
+  useEffect(() => {
+    const chargerParametres = async () => {
+      const params = await getParametres();
+      setParametres(params);
+      
+      // Vérifier si les paramètres ont changé
+      if (derniersParametres && JSON.stringify(params) !== JSON.stringify(derniersParametres)) {
+        setParametresModifies(true);
+      }
+      
+      setDerniersParametres(params);
+    };
+    chargerParametres();
+  }, [derniersParametres]);
 
   // Charger les packs depuis Firebase
   const chargerPacks = async () => {
@@ -59,14 +79,18 @@ export default function PacksTab({ packs, setPacks, inventaire, beneficiaires })
 
   const handleSuccess = () => {
     chargerPacks();
+    setParametresModifies(false);
   };
 
   // Vérifier si des packs peuvent être générés
-  const peutGenerer = inventaire.length > 0 && beneficiaires.filter(b => b.statut === 'Validé').length > 0;
+  const peutGenerer = inventaire.length > 0 && beneficiaires.filter(b => 
+    b.statut === 'Validé' || b.statut === 'Pack Attribué'
+  ).length > 0;
 
-  // SÉPARER LES PACKS STANDARD ET SUPPLÉMENTS
+  // SÉPARER LES PACKS STANDARD, SUPPLÉMENTS ET BONUS
   const packsStandard = packs.filter(p => p.type === 'standard');
   const packsSupplements = packs.filter(p => p.type === 'supplement');
+  const packBonus = packs.find(p => p.type === 'bonus');
 
   // Résumé packs standard par taille
   const resumeParTaille = {};
@@ -95,6 +119,27 @@ export default function PacksTab({ packs, setPacks, inventaire, beneficiaires })
 
   return (
     <div className="space-y-6">
+      {/* NOTIFICATION PARAMÈTRES MODIFIÉS */}
+      {parametresModifies && packs.length > 0 && (
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-amber-800">
+              ⚠️ Les paramètres de distribution ont été modifiés
+            </p>
+            <p className="text-sm text-amber-700 mt-1">
+              Veuillez régénérer les packs pour appliquer les nouveaux paramètres (coefficients, répartition des articles favoris, etc.).
+            </p>
+          </div>
+          <button
+            onClick={() => setShowModal(true)}
+            className="ml-2 px-4 py-1 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-700 transition font-semibold flex-shrink-0 whitespace-nowrap"
+          >
+            Régénérer
+          </button>
+        </div>
+      )}
+
       {/* En-tête */}
       <div className="flex justify-between items-center">
         <div>
@@ -131,7 +176,7 @@ export default function PacksTab({ packs, setPacks, inventaire, beneficiaires })
             className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Sparkles className="w-5 h-5" />
-            {packs.length > 0 ? 'Régénérer les packs' : 'Générer automatiquement'}
+            {packs.length > 0 ? 'Régénérer manuellement' : 'Générer les packs'}
           </button>
         </div>
       </div>
@@ -146,7 +191,7 @@ export default function PacksTab({ packs, setPacks, inventaire, beneficiaires })
             </p>
             <p className="text-sm text-yellow-700 mt-1">
               {inventaire.length === 0 && 'Ajoutez des articles à l\'inventaire. '}
-              {beneficiaires.filter(b => b.statut === 'Validé').length === 0 && 'Validez au moins un bénéficiaire.'}
+              {beneficiaires.filter(b => b.statut === 'Validé' || b.statut === 'Pack Attribué').length === 0 && 'Validez au moins un bénéficiaire.'}
             </p>
           </div>
         </div>
@@ -197,7 +242,7 @@ export default function PacksTab({ packs, setPacks, inventaire, beneficiaires })
                   📦 Packs Standard à Préparer
                 </h3>
                 <p className="text-sm text-gray-600">
-                  Contient 70% des articles favoris + 100% des autres articles • Distribués avec coefficients (Petite: 1, Moyenne: 2, Grande: 3)
+                  Contient {parametres?.repartition?.standard || 70}% des articles favoris + 100% des autres articles • Distribués avec coefficients (Petite: {parametres?.coefficients?.Petite || 1}, Moyenne: {parametres?.coefficients?.Moyenne || 2}, Grande: {parametres?.coefficients?.Grande || 3})
                 </p>
               </div>
               
@@ -296,7 +341,7 @@ export default function PacksTab({ packs, setPacks, inventaire, beneficiaires })
                   🎁 Suppléments à Préparer
                 </h3>
                 <p className="text-sm text-gray-600">
-                  Contient 30% des articles favoris • Distribués équitablement (SANS coefficient) aux familles ayant choisi cet article
+                  Contient {parametres?.repartition?.supplement || 30}% des articles favoris • Distribués équitablement (SANS coefficient) aux familles ayant choisi cet article
                 </p>
               </div>
               
@@ -395,6 +440,50 @@ export default function PacksTab({ packs, setPacks, inventaire, beneficiaires })
             </div>
           )}
 
+          {/* SECTION 3 : PACK BONUS */}
+          {packBonus && (
+            <div className="bg-gradient-to-r from-emerald-100 via-teal-100 to-cyan-100 rounded-xl shadow-lg border-2 border-emerald-400 p-8">
+              <div className="mb-6">
+                <h3 className="text-2xl font-bold text-gray-800 flex items-center gap-2 mb-2">
+                  🎁 Pack Bonus à Distribuer
+                </h3>
+                <p className="text-sm text-gray-600">
+                  Restes accumulés à distribuer en priorité (premier arrivé, premier servi) ou aux familles dans le besoin
+                </p>
+              </div>
+              
+              <div className="bg-white rounded-xl border-2 border-emerald-300 overflow-hidden">
+                {/* En-tête */}
+                <div className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white p-6">
+                  <div className="flex items-baseline gap-3">
+                    <span className="text-5xl font-black">{packBonus.quantiteTotale?.toFixed(2)}</span>
+                    <span className="text-lg opacity-90">kg/L total</span>
+                  </div>
+                  <p className="text-sm mt-2 opacity-90">{packBonus.note}</p>
+                </div>
+
+                {/* Composition */}
+                <div className="p-6 bg-gray-50">
+                  <h5 className="text-xs font-bold text-gray-600 mb-3 uppercase tracking-wide">
+                    📋 Contenu du pack bonus :
+                  </h5>
+                  <div className="space-y-2">
+                    {packBonus.composition.map((item, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-white p-4 rounded-lg border-2 border-emerald-200">
+                        <div className="flex-1">
+                          <span className="text-base font-medium text-gray-800">{item.produit}</span>
+                        </div>
+                        <span className="text-xl font-bold text-emerald-600 ml-4">
+                          {item.quantite?.toFixed(2)} {item.unite}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Info récapitulative */}
           <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6">
             <h4 className="font-bold text-blue-900 mb-3 flex items-center gap-2">
@@ -402,10 +491,11 @@ export default function PacksTab({ packs, setPacks, inventaire, beneficiaires })
               Logique de distribution
             </h4>
             <div className="space-y-2 text-sm text-blue-800">
-              <p>• <strong>Articles favoris (RIZ, PÂTES, COUSCOUS) :</strong> 70% distribués dans les packs standard + 30% dans les suppléments</p>
-              <p>• <strong>Packs standard :</strong> Distribution avec coefficients (Grande: 3, Moyenne: 2, Petite: 1)</p>
+              <p>• <strong>Articles favoris (RIZ, PÂTES, COUSCOUS) :</strong> {parametres?.repartition?.standard || 70}% distribués dans les packs standard + {parametres?.repartition?.supplement || 30}% dans les suppléments</p>
+              <p>• <strong>Packs standard :</strong> Distribution avec coefficients (Grande: {parametres?.coefficients?.Grande || 3}, Moyenne: {parametres?.coefficients?.Moyenne || 2}, Petite: {parametres?.coefficients?.Petite || 1})</p>
               <p>• <strong>Suppléments :</strong> Distribution équitable (SANS coefficient) aux familles ayant choisi l'article</p>
               <p>• <strong>Autres articles :</strong> 100% distribués dans les packs standard avec coefficients</p>
+              <p>• <strong>Pack Bonus :</strong> Restes accumulés à distribuer en priorité</p>
             </div>
           </div>
         </>
