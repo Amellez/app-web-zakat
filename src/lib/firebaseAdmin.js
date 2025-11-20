@@ -1,6 +1,7 @@
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, writeBatch, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
 import { genererPacksAutomatiques, normaliserArticleFavori } from './packCalculator';
+import { getParametres } from './parametresconfig';
 
 /**
  * Gère les erreurs Firebase de manière centralisée
@@ -132,25 +133,31 @@ export async function genererEtSauvegarderPacks() {
   try {
     console.log('🔄 Début de la régénération automatique des packs...');
     
-    // 1. Récupérer l'inventaire et les bénéficiaires
+    // 1. Charger les paramètres de configuration
+    const parametres = await getParametres();
+    console.log('⚙️ Paramètres chargés:', parametres);
+    
+    // 2. Récupérer l'inventaire et les bénéficiaires
     const inventaire = await getInventaire();
     const beneficiaires = await getBeneficiaires();
     
     console.log('📦 Génération des packs avec articles favoris...');
     console.log(`   - Inventaire: ${inventaire.length} articles`);
     console.log(`   - Bénéficiaires: ${beneficiaires.length} personnes`);
+    console.log(`   - Répartition: ${parametres.repartition.standard}% standard / ${parametres.repartition.supplement}% supplément`);
+    console.log(`   - Coefficients: Petite=${parametres.coefficients.Petite}, Moyenne=${parametres.coefficients.Moyenne}, Grande=${parametres.coefficients.Grande}`);
     
-    // 2. Générer les packs avec le nouveau système
-    const { packsStandard, packsSupplements } = genererPacksAutomatiques(inventaire, beneficiaires);
+    // 3. Générer les packs avec les paramètres configurés
+    const { packsStandard, packsSupplements } = genererPacksAutomatiques(inventaire, beneficiaires, parametres);
     
-    // 3. Combiner les deux types de packs
+    // 4. Combiner les deux types de packs
     const tousLesPacks = [...packsStandard, ...packsSupplements];
     
     console.log(`📦 Packs standard: ${packsStandard.length}`);
     console.log(`🎁 Packs suppléments: ${packsSupplements.length}`);
     console.log(`✅ Total: ${tousLesPacks.length}`);
     
-    // 4. Supprimer les anciens packs (en batch)
+    // 5. Supprimer les anciens packs (en batch)
     const anciensPacks = await getDocs(collection(db, 'packs'));
     const batch = writeBatch(db);
     
@@ -161,7 +168,7 @@ export async function genererEtSauvegarderPacks() {
     await batch.commit();
     console.log('🗑️ Anciens packs supprimés');
     
-    // 5. Sauvegarder les nouveaux packs
+    // 6. Sauvegarder les nouveaux packs
     const packsIds = [];
     for (const pack of tousLesPacks) {
       const docRef = await addDoc(collection(db, 'packs'), {
