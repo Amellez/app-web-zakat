@@ -1,18 +1,21 @@
+// src/components/admin/AdminDashboard.jsx
 "use client";
 
 import React, { useState, useEffect } from "react";
 import { Users, Package, MapPin, Box } from "lucide-react";
 import { useAuth } from '@/context/AuthContext';
+import { useMosquee } from '@/context/MosqueeContext';
 import { useRouter } from 'next/navigation';
 import BeneficiairesTab from "./beneficiaires/BeneficiairesTab";
 import InventaireTab from "./inventaire/InventaireTab";
 import PacksTab from "./packs/PacksTab";
 import ItinerairesTab from "./itineraires/ItinerairesTab";
+import MosqueeSelector from "./ui/MosqueeSelector";
 import { getBeneficiaires, getInventaire, getPacks } from "@/lib/firebaseAdmin";
 
 // Composant Menu Profil
 function ProfileMenu() {
-  const { user, logout } = useAuth();
+  const { user, userData, logout } = useAuth();
   const router = useRouter();
   const [showMenu, setShowMenu] = useState(false);
 
@@ -28,8 +31,17 @@ function ProfileMenu() {
         className="flex items-center gap-3 hover:bg-gray-50 rounded-lg px-3 py-2 transition-all"
       >
         <div className="text-right">
-          <p className="text-sm font-semibold text-gray-800">Administrateur</p>
+          <p className="text-sm font-semibold text-gray-800">
+            {userData?.nom || 'Administrateur'}
+          </p>
           <p className="text-xs text-gray-500">{user?.email}</p>
+          {userData?.role && (
+            <p className="text-xs text-emerald-600 font-medium">
+              {userData.role === 'super_admin' ? 'Super Admin' : 
+               userData.role === 'admin_mosquee' ? 'Admin Mosquée' : 
+               'Bénévole'}
+            </p>
+          )}
         </div>
         <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center text-white font-bold shadow-md">
           {user?.email?.[0].toUpperCase()}
@@ -50,17 +62,24 @@ function ProfileMenu() {
       {showMenu && (
         <>
           {/* Overlay pour fermer le menu en cliquant ailleurs */}
-          <div 
-            className="fixed inset-0 z-10" 
+          <div
+            className="fixed inset-0 z-10"
             onClick={() => setShowMenu(false)}
           />
-          
+
           <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-20">
             <div className="p-4 bg-gradient-to-r from-emerald-50 to-teal-50 border-b">
               <p className="text-sm font-medium text-gray-900">Connecté en tant que</p>
               <p className="text-xs text-gray-600 truncate">{user?.email}</p>
+              {userData?.role && (
+                <span className="inline-block mt-2 px-2 py-1 bg-emerald-100 text-emerald-700 text-xs font-semibold rounded">
+                  {userData.role === 'super_admin' ? 'Super Admin' : 
+                   userData.role === 'admin_mosquee' ? 'Admin Mosquée' : 
+                   'Bénévole'}
+                </span>
+              )}
             </div>
-            
+
             <div className="p-2">
               <button
                 onClick={() => {
@@ -88,6 +107,22 @@ function ProfileMenu() {
                 </svg>
                 <span className="text-sm font-medium text-gray-700">Paramètres</span>
               </button>
+              
+              {/* Afficher "Gérer les Mosquées" seulement pour super_admin */}
+              {userData?.role === 'super_admin' && (
+                <button
+                  onClick={() => {
+                    router.push('/super-admin/mosquees');
+                    setShowMenu(false);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-50 transition-all text-left"
+                >
+                  <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                  <span className="text-sm font-medium text-gray-700">🕌 Gérer les Mosquées</span>
+                </button>
+              )}
             </div>
 
             <div className="p-2 border-t">
@@ -109,32 +144,53 @@ function ProfileMenu() {
 }
 
 export default function AdminDashboard() {
+  const { mosqueeActive, loading: mosqueeLoading } = useMosquee();
   const [activeTab, setActiveTab] = useState("beneficiaires");
   const [beneficiaires, setBeneficiaires] = useState([]);
   const [inventaire, setInventaire] = useState([]);
   const [packs, setPacks] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Chargement initial des données
+  // Chargement initial des données quand mosqueeActive change
   useEffect(() => {
-    const chargerDonnees = async () => {
-      setLoading(true);
-      try {
-        const [dataBeneficiaires, dataInventaire, dataPacks] =
-          await Promise.all([getBeneficiaires(), getInventaire(), getPacks()]);
+    if (mosqueeActive && !mosqueeLoading) {
+      chargerDonnees();
+    }
+  }, [mosqueeActive, mosqueeLoading]);
 
-        setBeneficiaires(dataBeneficiaires);
-        setInventaire(dataInventaire);
-        setPacks(dataPacks);
-      } catch (error) {
-        console.error("Erreur chargement données:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const chargerDonnees = async () => {
+    if (!mosqueeActive) {
+      console.warn('⚠️ Aucune mosquée active');
+      setLoading(false);
+      return;
+    }
 
-    chargerDonnees();
-  }, []);
+    setLoading(true);
+    try {
+      // Passer mosqueeActive aux fonctions de chargement
+      const [dataBeneficiaires, dataInventaire, dataPacks] =
+        await Promise.all([
+          getBeneficiaires(mosqueeActive),
+          getInventaire(mosqueeActive),
+          getPacks(mosqueeActive)
+        ]);
+
+      setBeneficiaires(dataBeneficiaires);
+      setInventaire(dataInventaire);
+      setPacks(dataPacks);
+      
+      console.log('✅ Données chargées:', {
+        mosqueeId: mosqueeActive,
+        beneficiaires: dataBeneficiaires.length,
+        inventaire: dataInventaire.length,
+        packs: dataPacks.length
+      });
+    } catch (error) {
+      console.error("Erreur chargement données:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const tabs = [
     { id: "beneficiaires", label: "Bénéficiaires", icon: Users },
@@ -142,6 +198,34 @@ export default function AdminDashboard() {
     { id: "packs", label: "Packs", icon: Package },
     { id: "itineraires", label: "Itinéraires", icon: MapPin },
   ];
+
+  // Afficher un loader pendant le chargement de la mosquée
+  if (mosqueeLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Afficher un message si aucune mosquée active
+  if (!mosqueeActive) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-teal-100">
+        <div className="text-center bg-white p-8 rounded-xl shadow-lg">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">
+            Aucune mosquée sélectionnée
+          </h2>
+          <p className="text-gray-600">
+            Veuillez sélectionner une mosquée pour continuer.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-100">
@@ -157,9 +241,12 @@ export default function AdminDashboard() {
                 Système de gestion complet
               </p>
             </div>
-            
-            {/* Menu utilisateur avec dropdown */}
-            <ProfileMenu />
+
+            {/* Sélecteur de mosquée + Menu utilisateur */}
+            <div className="flex items-center gap-4">
+              <MosqueeSelector />
+              <ProfileMenu />
+            </div>
           </div>
         </div>
       </div>
@@ -191,28 +278,41 @@ export default function AdminDashboard() {
 
       {/* Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
-        {activeTab === "beneficiaires" && (
-          <BeneficiairesTab
-            beneficiaires={beneficiaires}
-            setBeneficiaires={setBeneficiaires}
-          />
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Chargement des données...</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            {activeTab === "beneficiaires" && (
+              <BeneficiairesTab
+                beneficiaires={beneficiaires}
+                setBeneficiaires={setBeneficiaires}
+              />
+            )}
+            {activeTab === "inventaire" && (
+              <InventaireTab
+                inventaire={inventaire}
+                setInventaire={setInventaire}
+                beneficiaires={beneficiaires}
+              />
+            )}
+            {activeTab === "packs" && (
+              <PacksTab
+                packs={packs}
+                setPacks={setPacks}
+                inventaire={inventaire}
+                beneficiaires={beneficiaires}
+              />
+            )}
+            {activeTab === "itineraires" && (
+              <ItinerairesTab beneficiaires={beneficiaires} />
+            )}
+          </>
         )}
-        {activeTab === "inventaire" && (
-          <InventaireTab
-            inventaire={inventaire}
-            setInventaire={setInventaire}
-            beneficiaires={beneficiaires}
-          />
-        )}
-        {activeTab === "packs" && (
-          <PacksTab
-            packs={packs}
-            setPacks={setPacks}
-            inventaire={inventaire}
-            beneficiaires={beneficiaires}
-          />
-        )}
-        {activeTab === "itineraires" && <ItinerairesTab />}
       </div>
     </div>
   );

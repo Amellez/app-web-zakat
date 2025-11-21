@@ -4,8 +4,12 @@ import React, { useState } from 'react';
 import { Loader2, UserPlus, AlertCircle, CheckCircle } from 'lucide-react';
 import Modal from '../ui/Modal';
 import { ajouterBeneficiaire } from '@/lib/firebaseAdmin';
+import { useMosquee } from '@/context/MosqueeContext'; // 🔥 AJOUTÉ
 
 export default function ModalAjouterBeneficiaire({ isOpen, onClose, onSuccess }) {
+  const { mosqueeActive, getMosqueeActiveData } = useMosquee(); // 🔥 AJOUTÉ
+  const mosqueeData = getMosqueeActiveData(); // 🔥 AJOUTÉ
+  
   const [formData, setFormData] = useState({
     nom: '',
     articleFavori: '',
@@ -140,6 +144,11 @@ export default function ModalAjouterBeneficiaire({ isOpen, onClose, onSuccess })
     setError('');
 
     try {
+      // 🔥 VÉRIFICATION : S'assurer qu'une mosquée est active
+      if (!mosqueeActive || mosqueeActive === 'ALL') {
+        throw new Error('Veuillez sélectionner une mosquée spécifique pour ajouter un bénéficiaire');
+      }
+
       // Validation basique
       if (!formData.nom || !formData.articleFavori || !formData.email || !formData.telephone || !formData.adresse || !formData.nbPersonnes) {
         throw new Error('Veuillez remplir tous les champs obligatoires');
@@ -162,7 +171,7 @@ export default function ModalAjouterBeneficiaire({ isOpen, onClose, onSuccess })
         throw new Error('Le nombre de personnes doit être supérieur à 0');
       }
 
-      // Préparer les données - SOURCE ADMIN et STATUT VALIDÉ
+      // 🔥 MODIFIÉ : Ajouter mosqueeId et mosqueeName
       const beneficiaire = {
         nom: formData.nom,
         articleFavori: formData.articleFavori,
@@ -172,6 +181,9 @@ export default function ModalAjouterBeneficiaire({ isOpen, onClose, onSuccess })
         complementAdresse: formData.complementAdresse || '',
         nbPersonnes: nbPersonnes,
         tailleFamille: getTailleFamille(nbPersonnes),
+        mosqueeId: mosqueeActive, // 🔥 AJOUTÉ
+        mosqueeName: mosqueeData?.nom || '', // 🔥 AJOUTÉ
+        mosqueeVille: mosqueeData?.ville || '', // 🔥 AJOUTÉ (optionnel)
         attestations: {
           musulman: true,
           besoin: true,
@@ -182,6 +194,8 @@ export default function ModalAjouterBeneficiaire({ isOpen, onClose, onSuccess })
         statut: 'Validé', // DIRECTEMENT VALIDÉ
         createdAt: new Date().toISOString()
       };
+
+      console.log('🔥 Ajout bénéficiaire avec mosqueeId:', mosqueeActive);
 
       // Envoyer à Firebase
       await ajouterBeneficiaire(beneficiaire);
@@ -208,11 +222,29 @@ export default function ModalAjouterBeneficiaire({ isOpen, onClose, onSuccess })
       onClose();
 
     } catch (err) {
+      console.error('❌ Erreur ajout bénéficiaire:', err);
       setError(err.message);
     } finally {
       setLoading(false);
     }
   };
+
+  // 🔥 AJOUTÉ : Message si pas de mosquée sélectionnée
+  if (!mosqueeActive) {
+    return (
+      <Modal isOpen={isOpen} onClose={onClose} title="Ajouter un Bénéficiaire sur Place" size="lg">
+        <div className="p-8 text-center">
+          <AlertCircle className="w-12 h-12 text-yellow-600 mx-auto mb-4" />
+          <p className="text-gray-800 font-semibold mb-2">
+            Aucune mosquée sélectionnée
+          </p>
+          <p className="text-gray-600 text-sm">
+            Veuillez sélectionner une mosquée avant d'ajouter un bénéficiaire.
+          </p>
+        </div>
+      </Modal>
+    );
+  }
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Ajouter un Bénéficiaire sur Place" size="lg">
@@ -222,7 +254,7 @@ export default function ModalAjouterBeneficiaire({ isOpen, onClose, onSuccess })
           <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-semibold text-blue-800">
-              Inscription sur place
+              Inscription sur place - {mosqueeData?.nom}
             </p>
             <p className="text-sm text-blue-700 mt-1">
               Les bénéficiaires ajoutés ici sont automatiquement validés et marqués comme "Sur place"
@@ -423,7 +455,7 @@ export default function ModalAjouterBeneficiaire({ isOpen, onClose, onSuccess })
                   Article favori: {formData.articleFavori} • {formData.nbPersonnes} personnes ({getTailleFamille(formData.nbPersonnes)} famille)
                 </p>
                 <p className="text-xs text-emerald-600 font-medium mt-1">
-                  ✓ Sera automatiquement validé
+                  ✓ Sera automatiquement validé pour {mosqueeData?.nom}
                 </p>
               </div>
             </div>

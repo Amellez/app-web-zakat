@@ -6,8 +6,10 @@ import BeneficiaireRow from './BeneficiaireRow';
 import ModalAjouterBeneficiaire from './ModalAjouterBeneficiaire';
 import ModalModifierBeneficiaire from './ModalModifierBeneficiaire';
 import { getBeneficiaires, updateBeneficiaireStatut, supprimerBeneficiaire } from '@/lib/firebaseAdmin';
+import { useMosquee } from '@/context/MosqueeContext'; // 🔥 AJOUTÉ
 
 export default function BeneficiairesTab({ beneficiaires, setBeneficiaires }) {
+  const { mosqueeActive } = useMosquee(); // 🔥 AJOUTÉ
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
   const [beneficiaireToEdit, setBeneficiaireToEdit] = useState(null);
@@ -17,12 +19,20 @@ export default function BeneficiairesTab({ beneficiaires, setBeneficiaires }) {
 
   // Charger les bénéficiaires depuis Firebase
   const chargerBeneficiaires = async () => {
+    if (!mosqueeActive) {
+      console.warn('⚠️ Pas de mosqueeActive, chargement annulé');
+      return;
+    }
+
     setLoading(true);
     try {
-      const data = await getBeneficiaires();
+      // 🔥 MODIFIÉ : Passer mosqueeActive
+      const data = await getBeneficiaires(mosqueeActive);
       setBeneficiaires(data);
+      console.log(`✅ ${data.length} bénéficiaires chargés pour mosquée ${mosqueeActive}`);
     } catch (error) {
       console.error('Erreur chargement bénéficiaires:', error);
+      alert(`Erreur: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -150,7 +160,7 @@ export default function BeneficiairesTab({ beneficiaires, setBeneficiaires }) {
       <div className="flex justify-between items-center">
         <button
           onClick={chargerBeneficiaires}
-          disabled={loading}
+          disabled={loading || !mosqueeActive}
           className="flex items-center gap-2 px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
         >
           <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />

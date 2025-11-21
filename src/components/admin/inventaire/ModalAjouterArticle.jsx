@@ -1,11 +1,15 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Loader2, Package } from 'lucide-react';
+import { Loader2, Package, AlertCircle } from 'lucide-react';
 import Modal from '../ui/Modal';
 import { ajouterArticleInventaire } from '@/lib/firebaseAdmin';
+import { useMosquee } from '@/context/MosqueeContext'; // 🔥 AJOUTÉ
 
 export default function ModalAjouterArticle({ isOpen, onClose, onSuccess }) {
+  const { mosqueeActive, getMosqueeActiveData } = useMosquee(); // 🔥 AJOUTÉ
+  const mosqueeData = getMosqueeActiveData(); // 🔥 AJOUTÉ
+  
   const [formData, setFormData] = useState({
     nom: '',
     quantite: '',
@@ -29,7 +33,11 @@ export default function ModalAjouterArticle({ isOpen, onClose, onSuccess }) {
     setError('');
 
     try {
-      // Validation
+      // 🔥 VÉRIFICATION mosqueeActive
+      if (!mosqueeActive || mosqueeActive === 'ALL') {
+        throw new Error('Veuillez sélectionner une mosquée spécifique pour ajouter un article');
+      }
+
       if (!formData.nom || !formData.quantite || !formData.unite || !formData.seuil) {
         throw new Error('Veuillez remplir tous les champs');
       }
@@ -38,15 +46,14 @@ export default function ModalAjouterArticle({ isOpen, onClose, onSuccess }) {
         throw new Error('Les quantités doivent être positives');
       }
 
-      // Ajouter à Firebase
+      // 🔥 MODIFIÉ : Passer mosqueeActive
       await ajouterArticleInventaire({
         nom: formData.nom.trim(),
         quantite: parseFloat(formData.quantite),
         unite: formData.unite,
         seuil: parseFloat(formData.seuil)
-      });
+      }, mosqueeActive);
 
-      // Réinitialiser le formulaire
       setFormData({
         nom: '',
         quantite: '',
@@ -54,25 +61,46 @@ export default function ModalAjouterArticle({ isOpen, onClose, onSuccess }) {
         seuil: ''
       });
 
-      // Callback de succès
       if (onSuccess) {
         onSuccess();
       }
 
-      // Fermer la modal
       onClose();
 
     } catch (err) {
+      console.error('❌ Erreur ajout article:', err);
       setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
+  if (!mosqueeActive) {
+    return (
+      <Modal isOpen={isOpen} onClose={onClose} title="Ajouter un Article" size="md">
+        <div className="p-8 text-center">
+          <AlertCircle className="w-12 h-12 text-yellow-600 mx-auto mb-4" />
+          <p className="text-gray-800 font-semibold mb-2">
+            Aucune mosquée sélectionnée
+          </p>
+          <p className="text-gray-600 text-sm">
+            Veuillez sélectionner une mosquée avant d'ajouter un article.
+          </p>
+        </div>
+      </Modal>
+    );
+  }
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Ajouter un Article" size="md">
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Nom de l'article */}
+        {/* Info mosquée */}
+        <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-3">
+          <p className="text-sm text-blue-800">
+            📦 Article pour : <strong>{mosqueeData?.nom}</strong>
+          </p>
+        </div>
+
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-2">
             Nom de l'article *
@@ -90,7 +118,6 @@ export default function ModalAjouterArticle({ isOpen, onClose, onSuccess }) {
           </p>
         </div>
 
-        {/* Quantité et Unité */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -126,7 +153,6 @@ export default function ModalAjouterArticle({ isOpen, onClose, onSuccess }) {
           </div>
         </div>
 
-        {/* Seuil d'alerte */}
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-2">
             Seuil d'alerte *
@@ -146,14 +172,12 @@ export default function ModalAjouterArticle({ isOpen, onClose, onSuccess }) {
           </p>
         </div>
 
-        {/* Message d'erreur */}
         {error && (
           <div className="p-4 bg-red-50 border-2 border-red-200 rounded-lg">
             <p className="text-sm text-red-800">{error}</p>
           </div>
         )}
 
-        {/* Aperçu */}
         {formData.nom && formData.quantite && (
           <div className="p-4 bg-emerald-50 border-2 border-emerald-200 rounded-lg">
             <div className="flex items-center gap-3">
@@ -173,7 +197,6 @@ export default function ModalAjouterArticle({ isOpen, onClose, onSuccess }) {
           </div>
         )}
 
-        {/* Boutons */}
         <div className="flex gap-4">
           <button
             type="button"

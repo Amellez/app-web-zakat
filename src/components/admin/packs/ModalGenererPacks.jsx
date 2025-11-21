@@ -3,9 +3,11 @@
 import React, { useState } from 'react';
 import { Loader2, CheckCircle, AlertCircle, Package, TrendingUp, Gift } from 'lucide-react';
 import Modal from '../ui/Modal';
+import { useMosquee } from '@/context/MosqueeContext'; // 🔥 AJOUTÉ
 import { genererEtSauvegarderPacks, attribuerPacksAuxBeneficiaires } from '@/lib/firebaseAdmin';
 
 export default function ModalGenererPacks({ isOpen, onClose, onSuccess, inventaire, beneficiaires }) {
+  const { mosqueeActive } = useMosquee(); // 🔥 AJOUTÉ
   const [loading, setLoading] = useState(false);
   const [etape, setEtape] = useState('confirmation'); // confirmation, generation, attribution, success
   const [resultat, setResultat] = useState(null);
@@ -50,12 +52,18 @@ export default function ModalGenererPacks({ isOpen, onClose, onSuccess, inventai
   };
 
   const handleGenerer = async () => {
+    // 🔥 VÉRIFICATION mosqueeActive
+    if (!mosqueeActive || mosqueeActive === 'ALL') {
+      alert('Erreur: Veuillez sélectionner une mosquée spécifique pour générer les packs');
+      return;
+    }
+
     setLoading(true);
     setEtape('generation');
 
     try {
       // 1. Générer les packs
-      const resultGeneration = await genererEtSauvegarderPacks();
+      const resultGeneration = await genererEtSauvegarderPacks(mosqueeActive); // 🔥 MODIFIÉ
       
       if (!resultGeneration.success) {
         throw new Error(resultGeneration.message);
@@ -64,7 +72,7 @@ export default function ModalGenererPacks({ isOpen, onClose, onSuccess, inventai
       setEtape('attribution');
 
       // 2. Attribuer les packs aux bénéficiaires
-      const resultAttribution = await attribuerPacksAuxBeneficiaires();
+      const resultAttribution = await attribuerPacksAuxBeneficiaires(mosqueeActive); // 🔥 MODIFIÉ
 
       if (!resultAttribution.success) {
         throw new Error(resultAttribution.message);
@@ -214,7 +222,8 @@ export default function ModalGenererPacks({ isOpen, onClose, onSuccess, inventai
             </button>
             <button
               onClick={handleGenerer}
-              className="flex-1 px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-semibold flex items-center justify-center gap-2"
+              disabled={!mosqueeActive || mosqueeActive === 'ALL'}
+              className="flex-1 px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <Package className="w-5 h-5" />
               Générer les packs

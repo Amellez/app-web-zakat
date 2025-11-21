@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Package, ChevronDown, ChevronUp, Gift } from 'lucide-react';
 
-export default function PackCard({ pack, isSupplementPack = false }) {
+export default function PackCard({ pack, isSupplementPack = false, isBonusPack = false }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   // Couleurs badge taille (pour packs standard)
@@ -48,10 +48,22 @@ export default function PackCard({ pack, isSupplementPack = false }) {
     }
   };
 
+  // Couleurs pour Pack Bonus
+  const bonusColors = {
+    gradient: 'from-emerald-500 to-teal-500',
+    bg: 'bg-emerald-50',
+    border: 'border-emerald-300',
+    text: 'text-emerald-800'
+  };
+
   // Déterminer les couleurs à utiliser
   let colors, titre, nombre;
   
-  if (isSupplementPack) {
+  if (isBonusPack) {
+    colors = bonusColors;
+    titre = '🎁 Pack Bonus';
+    nombre = pack.quantiteTotale?.toFixed(2) || 0;
+  } else if (isSupplementPack) {
     colors = articleFavoriColors[pack.articleFavori] || articleFavoriColors['RIZ'];
     titre = `${colors.emoji} Supplément ${pack.articleFavori}`;
     nombre = pack.nombreFamilles;
@@ -72,11 +84,20 @@ export default function PackCard({ pack, isSupplementPack = false }) {
             30% SUPPLÉMENT
           </div>
         )}
+
+        {/* Badge bonus si applicable */}
+        {isBonusPack && (
+          <div className="absolute top-4 right-4 bg-white/30 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold">
+            RESTES À DISTRIBUER
+          </div>
+        )}
         
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="bg-white/20 backdrop-blur-sm p-3 rounded-lg">
-              {isSupplementPack ? (
+              {isBonusPack ? (
+                <Gift className="w-8 h-8" />
+              ) : isSupplementPack ? (
                 <Gift className="w-8 h-8" />
               ) : (
                 <Package className="w-8 h-8" />
@@ -87,14 +108,18 @@ export default function PackCard({ pack, isSupplementPack = false }) {
                 {titre}
               </h3>
               <div className="text-sm opacity-90 mt-1">
-                {isSupplementPack ? 'Familles ayant choisi cet article' : 'Standard (70% + autres articles)'}
+                {isBonusPack 
+                  ? 'Premier arrivé, premier servi'
+                  : isSupplementPack 
+                    ? 'Familles ayant choisi cet article' 
+                    : 'Standard (70% + autres articles)'}
               </div>
             </div>
           </div>
           <div className="text-right">
             <div className="text-5xl font-black">{nombre}</div>
             <div className="text-sm font-semibold opacity-90 mt-1">
-              {isSupplementPack ? 'suppléments' : 'packs'}
+              {isBonusPack ? 'kg/L total' : isSupplementPack ? 'suppléments' : 'packs'}
             </div>
           </div>
         </div>
@@ -117,7 +142,7 @@ export default function PackCard({ pack, isSupplementPack = false }) {
       {isExpanded && (
         <div className="p-6 bg-gray-50">
           <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-            📋 Contenu par {isSupplementPack ? 'supplément' : 'pack'}
+            📋 Contenu {isBonusPack ? 'du pack bonus' : isSupplementPack ? 'par supplément' : 'par pack'}
           </h4>
           <div className="space-y-2">
             {pack.composition.map((item, idx) => (
@@ -140,33 +165,46 @@ export default function PackCard({ pack, isSupplementPack = false }) {
                 </div>
                 <div className="text-right">
                   <span className="text-lg font-bold text-gray-900">
-                    {item.quantiteParFamille || item.quantite} {item.unite}
+                    {isBonusPack 
+                      ? `${item.quantite?.toFixed(2)} ${item.unite}`
+                      : `${item.quantiteParFamille || item.quantite} ${item.unite}`}
                   </span>
                   <div className="text-xs text-gray-500 mt-1">
-                    par {isSupplementPack ? 'supplément' : 'pack'}
+                    {isBonusPack ? 'total disponible' : isSupplementPack ? 'par supplément' : 'par pack'}
                   </div>
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Total à préparer */}
-          <div className={`mt-6 p-4 ${colors.bg} border-2 ${colors.border} rounded-lg`}>
-            <h5 className="font-bold text-gray-800 mb-3">📊 Quantités totales à préparer</h5>
-            <div className="grid grid-cols-2 gap-3">
-              {pack.composition.map((item, idx) => {
-                const qteParItem = item.quantiteParFamille || item.quantite;
-                return (
-                  <div key={idx} className="bg-white p-3 rounded-lg">
-                    <div className="text-xs text-gray-600 truncate">{item.produit}</div>
-                    <div className="text-xl font-bold text-emerald-600">
-                      {(qteParItem * nombre).toFixed(2)} {item.unite}
-                    </div>
-                  </div>
-                );
-              })}
+          {/* Note spéciale pour pack bonus */}
+          {isBonusPack && pack.note && (
+            <div className="mt-4 p-3 bg-yellow-50 border-2 border-yellow-200 rounded-lg">
+              <p className="text-sm text-yellow-800">
+                ℹ️ <strong>{pack.note}</strong>
+              </p>
             </div>
-          </div>
+          )}
+
+          {/* Total à préparer (sauf pour pack bonus) */}
+          {!isBonusPack && (
+            <div className={`mt-6 p-4 ${colors.bg} border-2 ${colors.border} rounded-lg`}>
+              <h5 className="font-bold text-gray-800 mb-3">📊 Quantités totales à préparer</h5>
+              <div className="grid grid-cols-2 gap-3">
+                {pack.composition.map((item, idx) => {
+                  const qteParItem = item.quantiteParFamille || item.quantite;
+                  return (
+                    <div key={idx} className="bg-white p-3 rounded-lg">
+                      <div className="text-xs text-gray-600 truncate">{item.produit}</div>
+                      <div className="text-xl font-bold text-emerald-600">
+                        {(qteParItem * nombre).toFixed(2)} {item.unite}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

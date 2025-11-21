@@ -38,3 +38,26 @@ body {
 .animate-fadeIn {
   animation: fadeIn 0.5s ease-out;
 }
+/* ========================================
+   Fix pour les inputs après Leaflet CSS
+   ======================================== */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="tel"],
+input[type="number"],
+input[type="date"],
+textarea,
+select {
+  color: #111827 !important; /* text-gray-900 */
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #9ca3af !important; /* text-gray-400 */
+}
+
+/* Fix pour les labels */
+label {
+  color: #374151 !important; /* text-gray-700 */
+}

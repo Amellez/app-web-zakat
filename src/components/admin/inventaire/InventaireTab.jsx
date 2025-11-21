@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, RefreshCw, Loader2, Zap, CheckCircle2 } from 'lucide-react';
 import InventaireCard from './InventaireCard';
 import ModalAjouterArticle from './ModalAjouterArticle';
+import { useMosquee } from '@/context/MosqueeContext'; // 🔥 AJOUTÉ
 import { 
   getInventaire, 
   updateArticleInventaire, 
@@ -12,6 +13,7 @@ import {
 } from '@/lib/firebaseAdmin';
 
 export default function InventaireTab({ inventaire, setInventaire, beneficiaires }) {
+  const { mosqueeActive } = useMosquee(); // 🔥 AJOUTÉ
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -19,16 +21,18 @@ export default function InventaireTab({ inventaire, setInventaire, beneficiaires
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(null);
 
-  // 🔥 PAS de listener automatique - on charge juste l'inventaire au démarrage
   useEffect(() => {
-    chargerInventaire();
-  }, []);
+    if (mosqueeActive) {
+      chargerInventaire();
+    }
+  }, [mosqueeActive]);
 
-  // Charger l'inventaire depuis Firebase (initial + refresh manuel)
   const chargerInventaire = async () => {
+    if (!mosqueeActive) return;
+    
     setLoading(true);
     try {
-      const data = await getInventaire();
+      const data = await getInventaire(mosqueeActive); // 🔥 MODIFIÉ
       setInventaire(data);
       setLastUpdate(new Date());
     } catch (error) {
@@ -45,15 +49,12 @@ export default function InventaireTab({ inventaire, setInventaire, beneficiaires
 
   const handleSave = async (id) => {
     try {
-      // Indiquer que la régénération va commencer
       setIsRegenerating(true);
       
-      // Mettre à jour dans Firebase (régénération automatique intégrée)
       await updateArticleInventaire(id, {
         quantite: parseFloat(editValue)
-      });
+      }, mosqueeActive); // 🔥 AJOUTÉ
 
-      // Mettre à jour localement (sera aussi mis à jour par le listener)
       setInventaire(prev => prev.map(item =>
         item.id === id ? { ...item, quantite: parseFloat(editValue) } : item
       ));
@@ -63,7 +64,6 @@ export default function InventaireTab({ inventaire, setInventaire, beneficiaires
 
       console.log('✅ Article mis à jour - Packs régénérés automatiquement');
       
-      // Après 2 secondes, considérer que les packs sont synchronisés
       setTimeout(() => {
         setIsRegenerating(false);
       }, 2000);
@@ -81,13 +81,10 @@ export default function InventaireTab({ inventaire, setInventaire, beneficiaires
     }
 
     try {
-      // Indiquer que la régénération va commencer
       setIsRegenerating(true);
       
-      // Supprimer de Firebase (régénération automatique intégrée)
-      await supprimerArticleInventaire(id);
+      await supprimerArticleInventaire(id, mosqueeActive); // 🔥 AJOUTÉ
 
-      // Mettre à jour localement (sera aussi mis à jour par le listener)
       setInventaire(prev => prev.filter(item => item.id !== id));
       
       alert('✅ Article supprimé avec succès');
@@ -95,7 +92,6 @@ export default function InventaireTab({ inventaire, setInventaire, beneficiaires
 
       console.log('✅ Article supprimé - Packs régénérés automatiquement');
       
-      // Après 2 secondes, considérer que les packs sont synchronisés
       setTimeout(() => {
         setIsRegenerating(false);
       }, 2000);
@@ -108,15 +104,11 @@ export default function InventaireTab({ inventaire, setInventaire, beneficiaires
   };
 
   const handleSuccess = async () => {
-    // L'ajout déclenche automatiquement la régénération (dans firebaseAdmin.js)
     setIsRegenerating(true);
-    
-    // Recharger l'inventaire après ajout
     await chargerInventaire();
     
     console.log('✅ Article ajouté - Packs régénérés automatiquement');
     
-    // Après 2 secondes, considérer que les packs sont synchronisés
     setTimeout(() => {
       setIsRegenerating(false);
     }, 2000);
@@ -129,7 +121,7 @@ export default function InventaireTab({ inventaire, setInventaire, beneficiaires
         <div className="flex gap-3">
           <button
             onClick={chargerInventaire}
-            disabled={loading}
+            disabled={loading || !mosqueeActive}
             className="flex items-center gap-2 px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
           >
             <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
@@ -137,7 +129,8 @@ export default function InventaireTab({ inventaire, setInventaire, beneficiaires
           </button>
           <button
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition"
+            disabled={!mosqueeActive}
+            className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition disabled:opacity-50"
           >
             <Plus className="w-5 h-5" />
             Ajouter un produit
@@ -145,7 +138,6 @@ export default function InventaireTab({ inventaire, setInventaire, beneficiaires
         </div>
       </div>
 
-      {/* Info régénération automatique PERMANENTE */}
       <div className="bg-gradient-to-r from-emerald-50 to-blue-50 border-2 border-emerald-200 rounded-lg p-4">
         <div className="flex items-start gap-3">
           <Zap className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
@@ -178,7 +170,6 @@ export default function InventaireTab({ inventaire, setInventaire, beneficiaires
         )}
       </div>
 
-      {/* Indicateur de régénération en cours (plus visible) */}
       {isRegenerating && (
         <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 flex items-center gap-3 animate-pulse">
           <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
@@ -202,7 +193,8 @@ export default function InventaireTab({ inventaire, setInventaire, beneficiaires
           <p className="text-gray-600 mb-4">Aucun article dans l'inventaire</p>
           <button
             onClick={() => setShowModal(true)}
-            className="px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-semibold"
+            disabled={!mosqueeActive}
+            className="px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-semibold disabled:opacity-50"
           >
             Ajouter le premier article
           </button>
@@ -224,7 +216,6 @@ export default function InventaireTab({ inventaire, setInventaire, beneficiaires
         </div>
       )}
 
-      {/* Modal d'ajout */}
       <ModalAjouterArticle
         isOpen={showModal}
         onClose={() => setShowModal(false)}
