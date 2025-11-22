@@ -1,4 +1,4 @@
-// src/lib/firebaseAdminMultiMosquee.js
+// src/lib/firebaseAdmin.js
 import { 
   collection, 
   addDoc, 
@@ -43,10 +43,8 @@ export async function getInventaire(mosqueeId = null) {
     let q;
     
     if (mosqueeId && mosqueeId !== 'ALL') {
-      // Filtrer par mosquée spécifique
       q = query(collection(db, 'inventaire'), where('mosqueeId', '==', mosqueeId));
     } else {
-      // Super admin : voir tout
       q = collection(db, 'inventaire');
     }
     
@@ -73,13 +71,12 @@ export async function ajouterArticleInventaire(article, mosqueeId) {
     quantite: parseFloat(article.quantite),
     unite: article.unite,
     seuil: parseFloat(article.seuil) || 50,
-    mosqueeId: mosqueeId, // 🔥 Lier à la mosquée
+    mosqueeId: mosqueeId,
     createdAt: new Date().toISOString()
   });
   
   console.log(`✅ Article ajouté pour mosquée ${mosqueeId}, régénération automatique des packs...`);
   
-  // Régénération automatique des packs pour cette mosquée
   try {
     await genererEtSauvegarderPacks(mosqueeId);
   } catch (error) {
@@ -101,7 +98,6 @@ export async function updateArticleInventaire(id, updates, mosqueeId) {
   
   console.log('✅ Article mis à jour, régénération automatique des packs...');
   
-  // Régénération automatique des packs après modification
   try {
     await genererEtSauvegarderPacks(mosqueeId);
   } catch (error) {
@@ -117,7 +113,6 @@ export async function supprimerArticleInventaire(id, mosqueeId) {
   
   console.log('✅ Article supprimé, régénération automatique des packs...');
   
-  // Régénération automatique des packs après suppression
   try {
     await genererEtSauvegarderPacks(mosqueeId);
   } catch (error) {
@@ -133,10 +128,8 @@ export async function getBeneficiaires(mosqueeId = null) {
     let q;
     
     if (mosqueeId && mosqueeId !== 'ALL') {
-      // Filtrer par mosquée spécifique
       q = query(collection(db, 'beneficiaires'), where('mosqueeId', '==', mosqueeId));
     } else {
-      // Super admin : voir tout
       q = collection(db, 'beneficiaires');
     }
     
@@ -169,10 +162,8 @@ export async function getPacks(mosqueeId = null) {
     let q;
     
     if (mosqueeId && mosqueeId !== 'ALL') {
-      // Filtrer par mosquée spécifique
       q = query(collection(db, 'packs'), where('mosqueeId', '==', mosqueeId));
     } else {
-      // Super admin : voir tout
       q = collection(db, 'packs');
     }
     
@@ -188,7 +179,7 @@ export async function getPacks(mosqueeId = null) {
 
 /**
  * 🔥 FONCTION PRINCIPALE : Génère et sauvegarde automatiquement tous les packs
- * MODIFIÉ : Accepte mosqueeId en paramètre pour générer uniquement pour une mosquée
+ * 🔥 MODIFIÉ : Appelle automatiquement l'attribution des packs
  */
 export async function genererEtSauvegarderPacks(mosqueeId) {
   try {
@@ -198,11 +189,9 @@ export async function genererEtSauvegarderPacks(mosqueeId) {
 
     console.log(`🔄 Début de la régénération automatique des packs pour mosquée ${mosqueeId}...`);
     
-    // 1. Charger les paramètres de configuration
     const parametres = await getParametres();
     console.log('⚙️ Paramètres chargés:', parametres);
     
-    // 2. Récupérer l'inventaire et les bénéficiaires FILTRÉS par mosquée
     const inventaire = await getInventaire(mosqueeId);
     const beneficiaires = await getBeneficiaires(mosqueeId);
     
@@ -211,17 +200,15 @@ export async function genererEtSauvegarderPacks(mosqueeId) {
     console.log(`   - Bénéficiaires: ${beneficiaires.length} personnes`);
     console.log(`   - Répartition: ${parametres.repartition.standard}% standard / ${parametres.repartition.supplement}% supplément`);
     
-    // 3. Générer les packs avec les paramètres configurés
     const { packsStandard, packsSupplements } = genererPacksAutomatiques(inventaire, beneficiaires, parametres);
     
-    // 4. Combiner les deux types de packs
     const tousLesPacks = [...packsStandard, ...packsSupplements];
     
     console.log(`📦 Packs standard: ${packsStandard.length}`);
     console.log(`🎁 Packs suppléments: ${packsSupplements.length}`);
     console.log(`✅ Total: ${tousLesPacks.length}`);
     
-    // 5. Supprimer les anciens packs DE CETTE MOSQUÉE UNIQUEMENT
+    // Supprimer les anciens packs
     const anciensPacks = await getDocs(
       query(collection(db, 'packs'), where('mosqueeId', '==', mosqueeId))
     );
@@ -234,12 +221,12 @@ export async function genererEtSauvegarderPacks(mosqueeId) {
     await batch.commit();
     console.log(`🗑️ Anciens packs de la mosquée ${mosqueeId} supprimés`);
     
-    // 6. Sauvegarder les nouveaux packs avec mosqueeId
+    // Sauvegarder les nouveaux packs
     const packsIds = [];
     for (const pack of tousLesPacks) {
       const docRef = await addDoc(collection(db, 'packs'), {
         ...pack,
-        mosqueeId: mosqueeId, // 🔥 Lier le pack à la mosquée
+        mosqueeId: mosqueeId,
         createdAt: new Date().toISOString(),
         generationAuto: true
       });
@@ -247,6 +234,11 @@ export async function genererEtSauvegarderPacks(mosqueeId) {
     }
     
     console.log('✅ Nouveaux packs sauvegardés avec succès');
+    
+    // 🔥 AJOUTÉ : Appeler automatiquement l'attribution des packs
+    console.log('🎯 Attribution automatique des packs aux bénéficiaires...');
+    await attribuerPacksAuxBeneficiaires(mosqueeId);
+    
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     
     return {
@@ -267,7 +259,7 @@ export async function genererEtSauvegarderPacks(mosqueeId) {
 }
 
 /**
- * 🔒 Attribue les packs aux bénéficiaires validés d'une mosquée
+ * 🔥 CORRIGÉ : Attribue les packs aux bénéficiaires validés d'une mosquée
  */
 export async function attribuerPacksAuxBeneficiaires(mosqueeId) {
   try {
@@ -286,7 +278,6 @@ export async function attribuerPacksAuxBeneficiaires(mosqueeId) {
     let countAttributions = 0;
     
     for (const beneficiaire of beneficiairesAAttribuer) {
-      // Déterminer la taille en fonction du nombre de personnes
       let tailleFamille;
       if (beneficiaire.nbPersonnes) {
         tailleFamille = determinerTailleFamille(beneficiaire.nbPersonnes);
@@ -297,7 +288,6 @@ export async function attribuerPacksAuxBeneficiaires(mosqueeId) {
         tailleFamille = 'Petite';
       }
       
-      // Trouver le pack STANDARD correspondant à la taille
       const packStandard = packs.find(
         p => p.type === 'standard' && p.tailleFamille === tailleFamille
       );
@@ -307,7 +297,6 @@ export async function attribuerPacksAuxBeneficiaires(mosqueeId) {
         continue;
       }
       
-      // Trouver le pack SUPPLÉMENT si le bénéficiaire a un article favori
       let packSupplement = null;
       if (beneficiaire.articleFavori) {
         const articleFavoriNormalise = normaliserArticleFavori(beneficiaire.articleFavori);
@@ -323,12 +312,12 @@ export async function attribuerPacksAuxBeneficiaires(mosqueeId) {
         }
       }
       
-      // Attribuer le pack au bénéficiaire
+      // 🔥 IMPORTANT : Mettre à jour le statut à "Pack Attribué"
       const updates = {
         packId: packStandard.id,
         packSupplementId: packSupplement?.id || null,
         tailleFamille: tailleFamille,
-        statut: 'Pack Attribué',
+        statut: 'Pack Attribué', // 🔥 Changement de statut
         dateAttribution: new Date().toISOString()
       };
       
@@ -390,7 +379,7 @@ export async function supprimerTousLesPacks(mosqueeId) {
 }
 
 /**
- * Ajoute un bénéficiaire (depuis l'admin) - LE BENEF DOIT DÉJÀ AVOIR mosqueeId
+ * Ajoute un bénéficiaire
  */
 export async function ajouterBeneficiaire(beneficiaire) {
   try {
@@ -403,7 +392,6 @@ export async function ajouterBeneficiaire(beneficiaire) {
       createdAt: new Date().toISOString()
     });
     
-    // Régénérer les packs si le bénéficiaire est validé
     if (beneficiaire.statut === 'Validé') {
       console.log('✅ Bénéficiaire validé ajouté, régénération des packs...');
       await genererEtSauvegarderPacks(beneficiaire.mosqueeId);
@@ -426,24 +414,33 @@ export async function updateBeneficiaire(id, beneficiaire, mosqueeId) {
 
     const docRef = doc(db, 'beneficiaires', id);
     
-    // Récupérer le bénéficiaire actuel pour vérifier s'il a un pack
     const beneficiaireDoc = await getDoc(docRef);
     const beneficiaireData = beneficiaireDoc.exists() ? beneficiaireDoc.data() : null;
     
-    // Si le bénéficiaire a déjà un pack attribué et que des infos critiques changent
+    const adresseAChange = beneficiaireData && 
+                          beneficiaireData.adresse !== beneficiaire.adresse;
+    
     const infoCritiquesChangent = beneficiaireData && (
       beneficiaireData.articleFavori !== beneficiaire.articleFavori ||
       beneficiaireData.tailleFamille !== beneficiaire.tailleFamille ||
-      beneficiaireData.nbPersonnes !== beneficiaire.nbPersonnes
+      beneficiaireData.nbPersonnes !== beneficiaire.nbPersonnes ||
+      adresseAChange
     );
     
     const updates = {
       ...beneficiaire,
-      mosqueeId: mosqueeId, // 🔥 Forcer le mosqueeId
+      mosqueeId: mosqueeId,
       updatedAt: new Date().toISOString()
     };
     
-    // Si les infos critiques changent et qu'un pack était attribué, réinitialiser
+    if (adresseAChange) {
+      updates.coords = null;
+      updates.dateGeolocalisation = null;
+      updates.itineraireId = null;
+      updates.dateAssignationItineraire = null;
+      console.log(`📍 Adresse modifiée pour ${beneficiaire.nom}, coordonnées et itinéraire réinitialisés`);
+    }
+    
     if (infoCritiquesChangent && (beneficiaireData?.packId || beneficiaireData?.packSupplementId)) {
       updates.packId = null;
       updates.packSupplementId = null;
@@ -453,7 +450,6 @@ export async function updateBeneficiaire(id, beneficiaire, mosqueeId) {
     
     await updateDoc(docRef, updates);
     
-    // Régénérer les packs si nécessaire
     const shouldRegenerate = 
       beneficiaire.statut === 'Validé' || 
       beneficiaireData?.statut === 'Validé' ||
@@ -466,16 +462,14 @@ export async function updateBeneficiaire(id, beneficiaire, mosqueeId) {
     
     return {
       success: true,
-      packReinitialise: infoCritiquesChangent && (beneficiaireData?.packId || beneficiaireData?.packSupplementId)
+      packReinitialise: infoCritiquesChangent && (beneficiaireData?.packId || beneficiaireData?.packSupplementId),
+      coordsReinitialisees: adresseAChange
     };
   } catch (error) {
     handleFirebaseError(error, 'la modification du bénéficiaire');
   }
 }
 
-/**
- * Supprime un bénéficiaire
- */
 /**
  * 🔥 MODIFIÉ : Supprime un bénéficiaire avec mosqueeId
  */
@@ -485,7 +479,6 @@ export async function supprimerBeneficiaire(id, mosqueeId) {
       throw new Error('mosqueeId est requis pour la suppression');
     }
 
-    // Récupérer le bénéficiaire avant suppression
     const docRef = doc(db, 'beneficiaires', id);
     const beneficiaireDoc = await getDoc(docRef);
     
@@ -495,7 +488,6 @@ export async function supprimerBeneficiaire(id, mosqueeId) {
     
     const beneficiaire = beneficiaireDoc.data();
     
-    // Vérifier que le bénéficiaire appartient bien à cette mosquée
     if (beneficiaire.mosqueeId !== mosqueeId) {
       throw new Error('Ce bénéficiaire n\'appartient pas à votre mosquée');
     }
@@ -503,7 +495,6 @@ export async function supprimerBeneficiaire(id, mosqueeId) {
     await deleteDoc(docRef);
     console.log(`✅ Bénéficiaire ${id} supprimé de la mosquée ${mosqueeId}`);
     
-    // Régénérer les packs si le bénéficiaire était validé
     if (beneficiaire.statut === 'Validé' || beneficiaire.statut === 'Pack Attribué') {
       console.log('✅ Bénéficiaire validé supprimé, régénération des packs...');
       await genererEtSauvegarderPacks(mosqueeId);
@@ -516,7 +507,7 @@ export async function supprimerBeneficiaire(id, mosqueeId) {
 }
 
 /**
- * 🎯 LISTENER EN TEMPS RÉEL : Écoute les changements de l'inventaire (filtré par mosquée)
+ * Listeners en temps réel
  */
 export function ecouterInventaire(callback, mosqueeId = null) {
   console.log(`👂 Installation du listener temps réel sur l'inventaire (mosquée: ${mosqueeId})`);
@@ -550,9 +541,6 @@ export function ecouterInventaire(callback, mosqueeId = null) {
   return unsubscribe;
 }
 
-/**
- * 🎯 LISTENER EN TEMPS RÉEL : Écoute les changements des packs (filtré par mosquée)
- */
 export function ecouterPacks(callback, mosqueeId = null) {
   console.log(`👂 Installation du listener temps réel sur les packs (mosquée: ${mosqueeId})`);
   
@@ -585,9 +573,6 @@ export function ecouterPacks(callback, mosqueeId = null) {
   return unsubscribe;
 }
 
-/**
- * 🎯 LISTENER EN TEMPS RÉEL : Écoute les changements des bénéficiaires (filtré par mosquée)
- */
 export function ecouterBeneficiaires(callback, mosqueeId = null) {
   console.log(`👂 Installation du listener temps réel sur les bénéficiaires (mosquée: ${mosqueeId})`);
   

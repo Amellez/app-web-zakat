@@ -331,12 +331,7 @@ export default function SuperAdminDashboard() {
                         )}
                       </button>
 
-                      <button
-                        onClick={() => navigator.clipboard.writeText(`${window.location.origin}/inscription/${mosquee.id}`)}
-                        className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 font-semibold text-sm transition"
-                      >
-                        📋 Copier lien inscription
-                      </button>
+                      
                     </div>
                   </div>
                 </div>

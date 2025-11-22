@@ -197,7 +197,7 @@ export default function LoginPage() {
           <div className="mt-6 text-center">
             <button
               type="button"
-              onClick={() => alert('Fonctionnalité à venir : réinitialisation du mot de passe')}
+              onClick={() => router.push('/reset-password')}
               className="text-sm text-emerald-600 hover:text-emerald-700 font-medium"
             >
               Mot de passe oublié ?

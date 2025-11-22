@@ -1,71 +1,104 @@
-import React, { useState } from 'react';
-import { Users, Clock, Package, RefreshCw, Loader2, PackageX } from 'lucide-react';
-import StatCard from '../ui/StatCard';
-import SearchAndFilter from '../ui/SearchAndFilter';
-import BeneficiaireRow from './BeneficiaireRow';
-import ModalAjouterBeneficiaire from './ModalAjouterBeneficiaire';
-import ModalModifierBeneficiaire from './ModalModifierBeneficiaire';
-import { getBeneficiaires, updateBeneficiaireStatut, supprimerBeneficiaire } from '@/lib/firebaseAdmin';
-import { useMosquee } from '@/context/MosqueeContext'; // 🔥 AJOUTÉ
+import React, { useState, useEffect } from "react"; // 🔥 useEffect ajouté
+import {
+  Users,
+  Clock,
+  Package,
+  RefreshCw,
+  Loader2,
+  PackageX,
+} from "lucide-react";
+import StatCard from "../ui/StatCard";
+import SearchAndFilter from "../ui/SearchAndFilter";
+import BeneficiaireRow from "./BeneficiaireRow";
+import ModalAjouterBeneficiaire from "./ModalAjouterBeneficiaire";
+import ModalModifierBeneficiaire from "./ModalModifierBeneficiaire";
+import {
+  getBeneficiaires,
+  updateBeneficiaireStatut,
+  supprimerBeneficiaire,
+} from "@/lib/firebaseAdmin";
+import { useMosquee } from "@/context/MosqueeContext";
+import { ecouterBeneficiaires } from "@/lib/firebaseAdmin";
 
 export default function BeneficiairesTab({ beneficiaires, setBeneficiaires }) {
-  const { mosqueeActive } = useMosquee(); // 🔥 AJOUTÉ
+  const { mosqueeActive } = useMosquee();
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
   const [beneficiaireToEdit, setBeneficiaireToEdit] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
   const [loading, setLoading] = useState(false);
+
+  // 🔥 AJOUTÉ : Charger automatiquement quand mosqueeActive change
+  useEffect(() => {
+    if (mosqueeActive) {
+      chargerBeneficiaires();
+    }
+  }, [mosqueeActive]);
 
   // Charger les bénéficiaires depuis Firebase
   const chargerBeneficiaires = async () => {
     if (!mosqueeActive) {
-      console.warn('⚠️ Pas de mosqueeActive, chargement annulé');
+      console.warn("⚠️ Pas de mosqueeActive, chargement annulé");
       return;
     }
 
     setLoading(true);
     try {
-      // 🔥 MODIFIÉ : Passer mosqueeActive
       const data = await getBeneficiaires(mosqueeActive);
       setBeneficiaires(data);
-      console.log(`✅ ${data.length} bénéficiaires chargés pour mosquée ${mosqueeActive}`);
+      console.log(
+        `✅ ${data.length} bénéficiaires chargés pour mosquée ${mosqueeActive}`
+      );
     } catch (error) {
-      console.error('Erreur chargement bénéficiaires:', error);
+      console.error("Erreur chargement bénéficiaires:", error);
       alert(`Erreur: ${error.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredBeneficiaires = beneficiaires.filter(b => {
-    const matchesSearch = b.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         b.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = filterStatus === 'all' || b.statut === filterStatus;
+  // Dans le composant, ajoutez ce useEffect APRÈS celui qui charge les bénéficiaires
+  useEffect(() => {
+    if (!mosqueeActive) return;
+
+    // 🔥 Écouter les changements en temps réel
+    const unsubscribe = ecouterBeneficiaires((data) => {
+      setBeneficiaires(data);
+    }, mosqueeActive);
+
+    return () => unsubscribe();
+  }, [mosqueeActive]);
+
+  const filteredBeneficiaires = beneficiaires.filter((b) => {
+    const matchesSearch =
+      b.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      b.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesFilter = filterStatus === "all" || b.statut === filterStatus;
     return matchesSearch && matchesFilter;
   });
 
   const handleValidate = async (id) => {
     try {
-      await updateBeneficiaireStatut(id, 'Validé');
-      setBeneficiaires(prev => prev.map(b => 
-        b.id === id ? { ...b, statut: 'Validé' } : b
-      ));
+      await updateBeneficiaireStatut(id, "Validé");
+      setBeneficiaires((prev) =>
+        prev.map((b) => (b.id === id ? { ...b, statut: "Validé" } : b))
+      );
     } catch (error) {
-      console.error('Erreur validation:', error);
-      alert('Erreur lors de la validation');
+      console.error("Erreur validation:", error);
+      alert("Erreur lors de la validation");
     }
   };
 
   const handleReject = async (id) => {
     try {
-      await updateBeneficiaireStatut(id, 'Rejeté');
-      setBeneficiaires(prev => prev.map(b => 
-        b.id === id ? { ...b, statut: 'Rejeté' } : b
-      ));
+      await updateBeneficiaireStatut(id, "Rejeté");
+      setBeneficiaires((prev) =>
+        prev.map((b) => (b.id === id ? { ...b, statut: "Rejeté" } : b))
+      );
     } catch (error) {
-      console.error('Erreur rejet:', error);
-      alert('Erreur lors du rejet');
+      console.error("Erreur rejet:", error);
+      alert("Erreur lors du rejet");
     }
   };
 
@@ -75,16 +108,26 @@ export default function BeneficiairesTab({ beneficiaires, setBeneficiaires }) {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce bénéficiaire ? Cette action est irréversible.')) {
+    // 🔥 CORRIGÉ : await pour le confirm
+    const confirmed = await window.confirm(
+      "Êtes-vous sûr de vouloir supprimer ce bénéficiaire ? Cette action est irréversible."
+    );
+
+    if (!confirmed) {
       return;
     }
-    
+
+    if (!mosqueeActive) {
+      alert("Erreur: Aucune mosquée sélectionnée");
+      return;
+    }
+
     try {
-      await supprimerBeneficiaire(id);
-      setBeneficiaires(prev => prev.filter(b => b.id !== id));
+      await supprimerBeneficiaire(id, mosqueeActive);
+      setBeneficiaires((prev) => prev.filter((b) => b.id !== id));
     } catch (error) {
-      console.error('Erreur suppression:', error);
-      alert('Erreur lors de la suppression');
+      console.error("Erreur suppression:", error);
+      alert("Erreur lors de la suppression");
     }
   };
 
@@ -99,45 +142,47 @@ export default function BeneficiairesTab({ beneficiaires, setBeneficiaires }) {
   // Statistiques simplifiées
   const stats = {
     total: beneficiaires.length,
-    enAttente: beneficiaires.filter(b => b.statut === 'En attente').length,
+    enAttente: beneficiaires.filter((b) => b.statut === "En attente").length,
     // Bénéficiaires validés SANS pack attribué (en attente d'attribution)
-    packsEnAttente: beneficiaires.filter(b => 
-      b.statut === 'Validé' && !b.packId && !b.packSupplementId
+    packsEnAttente: beneficiaires.filter(
+      (b) => b.statut === "Validé" && !b.packId && !b.packSupplementId
     ).length,
     // Bénéficiaires avec packs attribués
-    packAttribues: beneficiaires.filter(b => 
-      b.statut === 'Pack Attribué' || b.packId || b.packSupplementId
-    ).length
+    packAttribues: beneficiaires.filter(
+      (b) => b.statut === "Pack Attribué" || b.packId || b.packSupplementId
+    ).length,
   };
 
   return (
     <div className="space-y-6">
       {/* Statistiques - Tout sur une ligne */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard 
-          title="Total Bénéficiaires" 
-          value={stats.total} 
-          icon={Users} 
-          color="gray" 
+        <StatCard
+          title="Total Bénéficiaires"
+          value={stats.total}
+          icon={Users}
+          color="gray"
         />
-        <StatCard 
-          title="En Attente de Validation" 
-          value={stats.enAttente} 
-          icon={Clock} 
-          color="yellow" 
+        <StatCard
+          title="En Attente de Validation"
+          value={stats.enAttente}
+          icon={Clock}
+          color="yellow"
         />
-        <StatCard 
-          title="Packs en Attente d'Attribution" 
-          value={stats.packsEnAttente} 
-          icon={PackageX} 
+        <StatCard
+          title="Packs en Attente d'Attribution"
+          value={stats.packsEnAttente}
+          icon={PackageX}
           color="orange"
-          subtitle={stats.packsEnAttente > 0 ? "Générez les packs" : "Tous attribués"}
+          subtitle={
+            stats.packsEnAttente > 0 ? "Générez les packs" : "Tous attribués"
+          }
         />
-        <StatCard 
-          title="Packs Attribués" 
-          value={stats.packAttribues} 
-          icon={Package} 
-          color="blue" 
+        <StatCard
+          title="Packs Attribués"
+          value={stats.packAttribues}
+          icon={Package}
+          color="blue"
         />
       </div>
 
@@ -147,10 +192,13 @@ export default function BeneficiairesTab({ beneficiaires, setBeneficiaires }) {
           <PackageX className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="text-sm font-semibold text-orange-800">
-              {stats.packsEnAttente} bénéficiaire{stats.packsEnAttente > 1 ? 's' : ''} en attente d'attribution
+              {stats.packsEnAttente} bénéficiaire
+              {stats.packsEnAttente > 1 ? "s" : ""} en attente d'attribution
             </p>
             <p className="text-sm text-orange-700 mt-1">
-              Ces bénéficiaires sont validés mais n'ont pas encore de pack. Rendez-vous dans l'onglet "Packs" pour générer et attribuer automatiquement.
+              Ces bénéficiaires sont validés mais n'ont pas encore de pack.
+              Rendez-vous dans l'onglet "Packs" pour générer et attribuer
+              automatiquement.
             </p>
           </div>
         </div>
@@ -163,7 +211,7 @@ export default function BeneficiairesTab({ beneficiaires, setBeneficiaires }) {
           disabled={loading || !mosqueeActive}
           className="flex items-center gap-2 px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
         >
-          <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-5 h-5 ${loading ? "animate-spin" : ""}`} />
           Actualiser
         </button>
       </div>
@@ -189,24 +237,41 @@ export default function BeneficiairesTab({ beneficiaires, setBeneficiaires }) {
             <table className="w-full">
               <thead className="bg-gray-50 border-b-2 border-gray-200">
                 <tr>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Nom</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Contact</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Article Favori</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Famille</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Source</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Statut</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Actions</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                    Nom
+                  </th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                    Contact
+                  </th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                    Article Favori
+                  </th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                    Famille
+                  </th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                    Source
+                  </th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                    Statut
+                  </th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {filteredBeneficiaires.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
+                    <td
+                      colSpan="7"
+                      className="px-6 py-12 text-center text-gray-500"
+                    >
                       Aucun bénéficiaire trouvé
                     </td>
                   </tr>
                 ) : (
-                  filteredBeneficiaires.map(beneficiaire => (
+                  filteredBeneficiaires.map((beneficiaire) => (
                     <BeneficiaireRow
                       key={beneficiaire.id}
                       beneficiaire={beneficiaire}
