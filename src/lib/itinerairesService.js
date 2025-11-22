@@ -1,11 +1,11 @@
-import { 
-  collection, 
-  addDoc, 
-  getDocs, 
-  doc, 
-  updateDoc, 
-  deleteDoc, 
-  writeBatch, 
+import {
+  collection,
+  addDoc,
+  getDocs,
+  doc,
+  updateDoc,
+  deleteDoc,
+  writeBatch,
   onSnapshot,
   query,
   where,
@@ -13,15 +13,15 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { geocodeMultiple } from './geocoding';
-import { 
-  creerClusters, 
-  optimiserOrdreVisite, 
+import {
+  creerClusters,
+  optimiserOrdreVisite,
   calculerStatistiquesItineraire,
-  genererNomItineraire 
+  genererNomItineraire
 } from './routeOptimizer';
 
 /**
- * 🔥 CORRIGÉ : Géolocalise les bénéficiaires et SAUVEGARDE les coords dans Firestore
+ * Géolocalise les bénéficiaires et retourne un mapping des coordonnées
  */
 export async function geolocaliserBeneficiaires(beneficiaires, mosqueeId, onProgress) {
   try {
@@ -30,7 +30,7 @@ export async function geolocaliserBeneficiaires(beneficiaires, mosqueeId, onProg
     }
 
     // Filtrer ceux qui n'ont pas encore de coords
-    const benefsSansCoords = beneficiaires.filter(b => 
+    const benefsSansCoords = beneficiaires.filter(b =>
       !b.coords || !b.coords.lat || !b.coords.lng
     );
 
@@ -39,7 +39,7 @@ export async function geolocaliserBeneficiaires(beneficiaires, mosqueeId, onProg
 
     if (benefsSansCoords.length === 0) {
       console.log('✅ Tous les bénéficiaires ont déjà des coordonnées');
-      return { success: true, count: 0 };
+      return { success: true, count: 0, coordsMap: {} };
     }
 
     // Préparer les adresses pour géolocalisation
@@ -50,11 +50,13 @@ export async function geolocaliserBeneficiaires(beneficiaires, mosqueeId, onProg
 
     console.log(`🌍 Début géolocalisation de ${adresses.length} adresses...`);
 
-    // Géolocaliser avec l'API française
+    // Géolocaliser
     const results = await geocodeMultiple(adresses, onProgress);
 
-    // ✅ CRUCIAL : Sauvegarder les coordonnées dans Firestore
+    // Sauvegarder les coordonnées dans Firestore + construire coordsMap
     let count = 0;
+    const coordsMap = {};
+
     for (const result of results) {
       if (result.coords && result.coords.lat && result.coords.lng) {
         try {
@@ -63,6 +65,8 @@ export async function geolocaliserBeneficiaires(beneficiaires, mosqueeId, onProg
             coords: result.coords,
             dateGeolocalisation: new Date().toISOString()
           });
+
+          coordsMap[result.id] = result.coords;
           console.log(`✅ Coords sauvegardées pour ${result.id}`);
           count++;
         } catch (error) {
@@ -73,15 +77,19 @@ export async function geolocaliserBeneficiaires(beneficiaires, mosqueeId, onProg
 
     console.log(`✅ ${count}/${benefsSansCoords.length} coordonnées sauvegardées dans Firestore`);
 
-    return { success: true, count };
+    return {
+      success: true,
+      count,
+      coordsMap
+    };
   } catch (error) {
     console.error('❌ Erreur géolocalisation:', error);
-    return { success: false, count: 0, error: error.message };
+    return { success: false, count: 0, coordsMap: {}, error: error.message };
   }
 }
 
 /**
- * 🔥 MODIFIÉ : Génère les itinéraires avec option forceRegeneration
+ * Génère les itinéraires automatiquement
  */
 export async function genererItinerairesAutomatiques(beneficiaires, mosqueeId, options = {}) {
   try {
@@ -89,14 +97,14 @@ export async function genererItinerairesAutomatiques(beneficiaires, mosqueeId, o
       throw new Error('mosqueeId requis pour la génération d\'itinéraires');
     }
 
-    const { rayonKm = 3, forceRegeneration = false } = options; // 🔥 Ajout forceRegeneration
+    const { rayonKm = 3, forceRegeneration = false } = options;
 
     console.log('🚀 === DÉBUT GÉNÉRATION ITINÉRAIRES ===');
     console.log(`📍 MosqueeId: ${mosqueeId}`);
     console.log(`📏 Rayon clustering: ${rayonKm}km`);
     console.log(`🔄 Force régénération: ${forceRegeneration}`);
 
-    // 🔥 MODIFIÉ : Si forceRegeneration, réinitialiser tous les itineraireId d'abord
+    // Si forceRegeneration, réinitialiser tous les itinéraires
     if (forceRegeneration) {
       console.log('🔄 Réinitialisation des itinéraires existants...');
       await supprimerTousLesItineraires(mosqueeId);
@@ -105,7 +113,7 @@ export async function genererItinerairesAutomatiques(beneficiaires, mosqueeId, o
     // 1. Filtrer les bénéficiaires éligibles
     const benefsEligibles = beneficiaires.filter(b =>
       (b.statut === 'Pack Attribué' || b.statut === 'Validé') &&
-      (!b.itineraireId || forceRegeneration) && // 🔥 Inclure même avec itineraireId si force
+      (!b.itineraireId || forceRegeneration) &&
       b.mosqueeId === mosqueeId
     );
 
@@ -116,7 +124,7 @@ export async function genererItinerairesAutomatiques(beneficiaires, mosqueeId, o
     }
 
     // 2. Vérifier que tous ont des coordonnées
-    const benefsAvecCoords = benefsEligibles.filter(b => 
+    const benefsAvecCoords = benefsEligibles.filter(b =>
       b.coords && b.coords.lat && b.coords.lng
     );
 
@@ -136,25 +144,37 @@ export async function genererItinerairesAutomatiques(beneficiaires, mosqueeId, o
 
     console.log(`✅ ${clusters.length} clusters créés`);
 
-    // 4. Optimiser chaque cluster et créer les itinéraires
+    // 4. Récupérer les codes existants
+    const itinerairesExistants = await getItineraires(mosqueeId);
+    const codesExistants = itinerairesExistants.map(it => it.codeUnique).filter(Boolean);
+
+    // 5. Optimiser chaque cluster et créer les itinéraires
     const itineraires = [];
-    
+    const { genererCodeUniqueNonUtilise } = await import('./codeGenerator');
+
     for (let i = 0; i < clusters.length; i++) {
       const cluster = clusters[i];
-      
+
       // Optimiser l'ordre de visite
       const clusterOptimise = optimiserOrdreVisite(cluster);
-      
+
       // Calculer les statistiques
       const stats = calculerStatistiquesItineraire(clusterOptimise);
-      
+
       // Générer le nom
       const nom = genererNomItineraire(clusterOptimise, i);
-      
+
+      // Générer un code unique
+      const codeUnique = genererCodeUniqueNonUtilise([
+        ...codesExistants,
+        ...itineraires.map(it => it.codeUnique)
+      ]);
+
       // Créer l'objet itinéraire
       const itineraire = {
         nom,
-        mosqueeId: mosqueeId, // 🔥 Lier à la mosquée
+        mosqueeId: mosqueeId,
+        codeUnique,
         statut: 'Non assigné',
         beneficiaires: clusterOptimise.map(b => ({
           id: b.id,
@@ -162,20 +182,20 @@ export async function genererItinerairesAutomatiques(beneficiaires, mosqueeId, o
           adresse: b.adresse,
           telephone: b.telephone,
           nbPersonnes: b.nbPersonnes,
-          coords: b.coords
+          coords: b.coords,
+          statutLivraison: 'En attente'
         })),
         statistiques: stats,
-        benevole: null,
         dateCreation: new Date().toISOString(),
         dateModification: new Date().toISOString()
       };
-      
+
       itineraires.push(itineraire);
     }
 
-    // 5. Sauvegarder les itinéraires dans Firestore
+    // 6. Sauvegarder les itinéraires dans Firestore
     console.log('💾 Sauvegarde des itinéraires...');
-    
+
     const itinerairesIds = [];
     for (const itineraire of itineraires) {
       const docRef = await addDoc(collection(db, 'itineraires'), itineraire);
@@ -183,14 +203,14 @@ export async function genererItinerairesAutomatiques(beneficiaires, mosqueeId, o
       console.log(`✅ Itinéraire créé: ${docRef.id}`);
     }
 
-    // 6. Mettre à jour les bénéficiaires avec leur itineraireId
+    // 7. Mettre à jour les bénéficiaires avec leur itineraireId
     console.log('🔗 Liaison bénéficiaires ↔ itinéraires...');
-    
+
     let benefsAssignes = 0;
     for (let i = 0; i < itineraires.length; i++) {
       const itineraireId = itinerairesIds[i];
       const beneficiaires = itineraires[i].beneficiaires;
-      
+
       for (const benef of beneficiaires) {
         try {
           const benefDocRef = doc(db, 'beneficiaires', benef.id);
@@ -229,13 +249,13 @@ export async function genererItinerairesAutomatiques(beneficiaires, mosqueeId, o
 export async function getItineraires(mosqueeId) {
   try {
     let q;
-    
+
     if (mosqueeId && mosqueeId !== 'ALL') {
       q = query(collection(db, 'itineraires'), where('mosqueeId', '==', mosqueeId));
     } else {
       q = collection(db, 'itineraires');
     }
-    
+
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
@@ -252,13 +272,13 @@ export async function getItineraires(mosqueeId) {
  */
 export function ecouterItineraires(callback, mosqueeId) {
   let q;
-  
+
   if (mosqueeId && mosqueeId !== 'ALL') {
     q = query(collection(db, 'itineraires'), where('mosqueeId', '==', mosqueeId));
   } else {
     q = collection(db, 'itineraires');
   }
-  
+
   return onSnapshot(q, (snapshot) => {
     const itineraires = snapshot.docs.map(doc => ({
       id: doc.id,
@@ -269,21 +289,77 @@ export function ecouterItineraires(callback, mosqueeId) {
 }
 
 /**
- * Assigne un bénévole à un itinéraire
+ * Récupère un itinéraire par son code unique
  */
-export async function assignerItineraireBenevole(itineraireId, benevoleData, mosqueeId) {
+export async function getItineraireParCode(codeUnique) {
+  try {
+    const q = query(
+      collection(db, 'itineraires'),
+      where('codeUnique', '==', codeUnique)
+    );
+
+    const querySnapshot = await getDocs(q);
+
+    if (querySnapshot.empty) {
+      return null;
+    }
+
+    const doc = querySnapshot.docs[0];
+    return {
+      id: doc.id,
+      ...doc.data()
+    };
+  } catch (error) {
+    console.error('Erreur récupération itinéraire par code:', error);
+    throw error;
+  }
+}
+
+/**
+ * Met à jour le statut de livraison d'un bénéficiaire
+ */
+export async function updateStatutLivraison(itineraireId, beneficiaireId, nouveauStatut) {
   try {
     const docRef = doc(db, 'itineraires', itineraireId);
-    await updateDoc(docRef, {
-      benevole: benevoleData,
-      statut: 'Assigné',
-      dateAssignation: new Date().toISOString()
+    const docSnap = await getDoc(docRef);
+
+    if (!docSnap.exists()) {
+      throw new Error('Itinéraire non trouvé');
+    }
+
+    const itineraire = docSnap.data();
+
+    // Mettre à jour le statut du bénéficiaire
+    const beneficiairesUpdates = itineraire.beneficiaires.map(b => {
+      if (b.id === beneficiaireId) {
+        return {
+          ...b,
+          statutLivraison: nouveauStatut,
+          dateLivraison: nouveauStatut === 'Livré' ? new Date().toISOString() : null
+        };
+      }
+      return b;
     });
-    
-    console.log(`✅ Bénévole ${benevoleData.nom} assigné à l'itinéraire ${itineraireId}`);
+
+    // Sauvegarder
+    await updateDoc(docRef, {
+      beneficiaires: beneficiairesUpdates,
+      dateModification: new Date().toISOString()
+    });
+
+    // Mettre à jour le bénéficiaire dans sa collection
+    if (nouveauStatut === 'Livré') {
+      const benefDocRef = doc(db, 'beneficiaires', beneficiaireId);
+      await updateDoc(benefDocRef, {
+        statut: 'Livré',
+        dateLivraison: new Date().toISOString()
+      });
+    }
+
+    console.log(`✅ Statut livraison mis à jour: ${beneficiaireId} → ${nouveauStatut}`);
     return { success: true };
   } catch (error) {
-    console.error('Erreur assignation bénévole:', error);
+    console.error('Erreur mise à jour statut livraison:', error);
     throw error;
   }
 }
@@ -298,7 +374,7 @@ export async function updateStatutItineraire(itineraireId, statut, mosqueeId) {
       statut,
       dateModification: new Date().toISOString()
     });
-    
+
     console.log(`✅ Statut itinéraire ${itineraireId} mis à jour: ${statut}`);
     return { success: true };
   } catch (error) {
@@ -312,7 +388,7 @@ export async function updateStatutItineraire(itineraireId, statut, mosqueeId) {
  */
 export async function supprimerItineraire(itineraireId, beneficiairesIds, mosqueeId) {
   try {
-    // 1. Réinitialiser les bénéficiaires
+    // Réinitialiser les bénéficiaires
     for (const benefId of beneficiairesIds) {
       const benefDocRef = doc(db, 'beneficiaires', benefId);
       await updateDoc(benefDocRef, {
@@ -320,10 +396,10 @@ export async function supprimerItineraire(itineraireId, beneficiairesIds, mosque
         dateAssignationItineraire: null
       });
     }
-    
-    // 2. Supprimer l'itinéraire
+
+    // Supprimer l'itinéraire
     await deleteDoc(doc(db, 'itineraires', itineraireId));
-    
+
     console.log(`✅ Itinéraire ${itineraireId} supprimé`);
     return { success: true };
   } catch (error) {
@@ -340,17 +416,17 @@ export async function supprimerTousLesItineraires(mosqueeId) {
     if (!mosqueeId || mosqueeId === 'ALL') {
       throw new Error('Vous devez spécifier une mosquée');
     }
-    
+
     console.log(`🗑️ Suppression de tous les itinéraires de ${mosqueeId}...`);
-    
-    // 1. Récupérer tous les itinéraires de cette mosquée
+
+    // Récupérer tous les itinéraires de cette mosquée
     const itineraires = await getItineraires(mosqueeId);
-    
-    // 2. Réinitialiser tous les bénéficiaires
-    const allBeneficiairesIds = itineraires.flatMap(it => 
+
+    // Réinitialiser tous les bénéficiaires
+    const allBeneficiairesIds = itineraires.flatMap(it =>
       it.beneficiaires.map(b => b.id)
     );
-    
+
     for (const benefId of allBeneficiairesIds) {
       try {
         const benefDocRef = doc(db, 'beneficiaires', benefId);
@@ -362,15 +438,15 @@ export async function supprimerTousLesItineraires(mosqueeId) {
         console.error(`Erreur réinitialisation bénéficiaire ${benefId}:`, error);
       }
     }
-    
-    // 3. Supprimer tous les itinéraires
+
+    // Supprimer tous les itinéraires
     const batch = writeBatch(db);
     itineraires.forEach(it => {
       const docRef = doc(db, 'itineraires', it.id);
       batch.delete(docRef);
     });
     await batch.commit();
-    
+
     console.log(`✅ ${itineraires.length} itinéraires supprimés`);
     return { success: true };
   } catch (error) {
