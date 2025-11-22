@@ -6,12 +6,15 @@ import {
   RefreshCw,
   Loader2,
   PackageX,
+  Upload,
+  Download,
 } from "lucide-react";
 import StatCard from "../ui/StatCard";
 import SearchAndFilter from "../ui/SearchAndFilter";
 import BeneficiaireRow from "./BeneficiaireRow";
 import ModalAjouterBeneficiaire from "./ModalAjouterBeneficiaire";
 import ModalModifierBeneficiaire from "./ModalModifierBeneficiaire";
+import ModalImporterBeneficiaires from "./ModalImporterBeneficiaires";
 import {
   getBeneficiaires,
   updateBeneficiaireStatut,
@@ -24,6 +27,7 @@ export default function BeneficiairesTab({ beneficiaires, setBeneficiaires }) {
   const { mosqueeActive } = useMosquee();
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
+  const [showImportForm, setShowImportForm] = useState(false);
   const [beneficiaireToEdit, setBeneficiaireToEdit] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -139,6 +143,115 @@ export default function BeneficiairesTab({ beneficiaires, setBeneficiaires }) {
     chargerBeneficiaires();
   };
 
+  const handleImportSuccess = () => {
+    chargerBeneficiaires();
+  };
+
+  // 📥 Export Excel
+  const exporterVersExcel = async () => {
+    try {
+      const ExcelJS = (await import('exceljs')).default;
+      
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'Gestion Zakat';
+      workbook.created = new Date();
+      
+      const worksheet = workbook.addWorksheet('Bénéficiaires', {
+        properties: { tabColor: { argb: 'FF10B981' } }
+      });
+
+      worksheet.columns = [
+        { header: 'N°', key: 'numero', width: 6 },
+        { header: 'Nom', key: 'nom', width: 25 },
+        { header: 'Email', key: 'email', width: 30 },
+        { header: 'Téléphone', key: 'telephone', width: 15 },
+        { header: 'Adresse', key: 'adresse', width: 50 },
+        { header: 'Nb Personnes', key: 'nbPersonnes', width: 12 },
+        { header: 'Taille Famille', key: 'tailleFamille', width: 15 },
+        { header: 'Article Favori', key: 'articleFavori', width: 15 },
+        { header: 'Source', key: 'source', width: 20 },
+        { header: 'Statut', key: 'statut', width: 15 },
+        { header: 'Pack Standard', key: 'packStandard', width: 14 },
+        { header: 'Pack Supplément', key: 'packSupplement', width: 14 },
+        { header: 'Date Inscription', key: 'dateInscription', width: 16 },
+      ];
+
+      worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF10B981' }
+      };
+      worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+      worksheet.getRow(1).height = 25;
+
+      filteredBeneficiaires.forEach((b, index) => {
+        const row = worksheet.addRow({
+          numero: index + 1,
+          nom: b.nom,
+          email: b.email,
+          telephone: b.telephone,
+          adresse: b.adresse,
+          nbPersonnes: b.nbPersonnes,
+          tailleFamille: b.tailleFamille,
+          articleFavori: b.articleFavori || 'Non spécifié',
+          source: b.source || 'Formulaire en ligne',
+          statut: b.statut,
+          packStandard: b.packId ? 'Oui' : 'Non',
+          packSupplement: b.packSupplementId ? 'Oui' : 'Non',
+          dateInscription: b.createdAt ? new Date(b.createdAt).toLocaleDateString('fr-FR') : '',
+        });
+
+        if (index % 2 === 0) {
+          row.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFF9FAFB' }
+          };
+        }
+
+        const statutCell = row.getCell('statut');
+        if (b.statut === 'Validé') {
+          statutCell.font = { color: { argb: 'FF10B981' }, bold: true };
+        } else if (b.statut === 'En attente') {
+          statutCell.font = { color: { argb: 'FFF59E0B' }, bold: true };
+        } else if (b.statut === 'Pack Attribué') {
+          statutCell.font = { color: { argb: 'FF3B82F6' }, bold: true };
+        } else if (b.statut === 'Rejeté') {
+          statutCell.font = { color: { argb: 'FFEF4444' }, bold: true };
+        }
+      });
+
+      worksheet.eachRow((row) => {
+        row.eachCell((cell) => {
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+            left: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+            bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+            right: { style: 'thin', color: { argb: 'FFE5E7EB' } }
+          };
+        });
+      });
+
+      const date = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-');
+      const fileName = `beneficiaires_${filterStatus !== 'all' ? filterStatus + '_' : ''}${date}.xlsx`;
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      link.click();
+      window.URL.revokeObjectURL(url);
+
+      console.log(`✅ Export Excel réussi: ${fileName}`);
+    } catch (error) {
+      console.error('❌ Erreur export Excel:', error);
+      alert('Erreur lors de l\'export Excel');
+    }
+  };
+
   // Statistiques simplifiées
   const stats = {
     total: beneficiaires.length,
@@ -204,16 +317,36 @@ export default function BeneficiairesTab({ beneficiaires, setBeneficiaires }) {
         </div>
       )}
 
-      {/* En-tête avec bouton actualiser */}
+      {/* En-tête avec boutons actualiser, importer et exporter */}
       <div className="flex justify-between items-center">
-        <button
-          onClick={chargerBeneficiaires}
-          disabled={loading || !mosqueeActive}
-          className="flex items-center gap-2 px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
-        >
-          <RefreshCw className={`w-5 h-5 ${loading ? "animate-spin" : ""}`} />
-          Actualiser
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={chargerBeneficiaires}
+            disabled={loading || !mosqueeActive}
+            className="flex items-center gap-2 px-3 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition disabled:opacity-50 text-sm"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+            Actualiser
+          </button>
+          
+          <button
+            onClick={() => setShowImportForm(true)}
+            disabled={!mosqueeActive}
+            className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 text-sm"
+          >
+            <Upload className="w-4 h-4" />
+            Importer
+          </button>
+
+          <button
+            onClick={exporterVersExcel}
+            disabled={filteredBeneficiaires.length === 0}
+            className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50 text-sm"
+          >
+            <Download className="w-4 h-4" />
+            Exporter ({filteredBeneficiaires.length})
+          </button>
+        </div>
       </div>
 
       {/* Filtres et Recherche */}
@@ -304,6 +437,13 @@ export default function BeneficiairesTab({ beneficiaires, setBeneficiaires }) {
         }}
         onSuccess={handleEditSuccess}
         beneficiaire={beneficiaireToEdit}
+      />
+
+      {/* Modal d'import */}
+      <ModalImporterBeneficiaires
+        isOpen={showImportForm}
+        onClose={() => setShowImportForm(false)}
+        onSuccess={handleImportSuccess}
       />
     </div>
   );

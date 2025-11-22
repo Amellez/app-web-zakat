@@ -16,6 +16,7 @@ export default function InventaireTab({ inventaire, setInventaire, beneficiaires
   const { mosqueeActive } = useMosquee(); // 🔥 AJOUTÉ
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
+  const [editName, setEditName] = useState(''); // 🔥 NOUVEAU : Pour éditer le nom
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
@@ -42,29 +43,41 @@ export default function InventaireTab({ inventaire, setInventaire, beneficiaires
     }
   };
 
-  const handleEdit = (id, currentQuantite) => {
+  const handleEdit = (id, currentQuantite, currentNom) => {
     setEditingId(id);
     setEditValue(currentQuantite.toString());
+    setEditName(currentNom); // 🔥 NOUVEAU
   };
 
   const handleCancel = () => {
     setEditingId(null);
     setEditValue('');
+    setEditName(''); // 🔥 NOUVEAU
   };
 
   const handleSave = async (id) => {
     try {
       setIsRegenerating(true);
       
-      await updateArticleInventaire(id, {
+      // 🔥 NOUVEAU : Mise à jour avec nom ET quantité
+      const updates = {
         quantite: parseFloat(editValue)
-      }, mosqueeActive); // 🔥 AJOUTÉ
+      };
+      
+      // Ajouter le nom seulement s'il a changé
+      const currentItem = inventaire.find(item => item.id === id);
+      if (editName.trim() && editName.trim() !== currentItem.nom) {
+        updates.nom = editName.trim();
+      }
+      
+      await updateArticleInventaire(id, updates, mosqueeActive);
 
       setInventaire(prev => prev.map(item =>
-        item.id === id ? { ...item, quantite: parseFloat(editValue) } : item
+        item.id === id ? { ...item, ...updates } : item
       ));
       
       setEditingId(null);
+      setEditName(''); // 🔥 NOUVEAU
       setLastUpdate(new Date());
 
       console.log('✅ Article mis à jour - Packs régénérés automatiquement');
@@ -218,6 +231,8 @@ export default function InventaireTab({ inventaire, setInventaire, beneficiaires
               editingId={editingId}
               editValue={editValue}
               setEditValue={setEditValue}
+              editName={editName}
+              setEditName={setEditName}
             />
           ))}
         </div>

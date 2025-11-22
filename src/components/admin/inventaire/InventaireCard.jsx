@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Edit, Save, Trash2, Package } from 'lucide-react';
 
-export default function InventaireCard({ item, onEdit, onCancel, onSave, onDelete, editingId, editValue, setEditValue }) {
+export default function InventaireCard({ item, onEdit, onCancel, onSave, onDelete, editingId, editValue, setEditValue, editName, setEditName }) {
   const isEditing = editingId === item.id;
 
   return (
@@ -24,12 +24,24 @@ export default function InventaireCard({ item, onEdit, onCancel, onSave, onDelet
           </div>
           
           <div className="flex-1 min-w-0">
-            <h3 className="font-bold text-lg text-gray-800 truncate mb-1">
-              {item.nom}
-            </h3>
-            <p className="text-xs text-gray-500 font-medium">
-              Stock disponible
-            </p>
+            {isEditing ? (
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="w-full px-3 py-2 text-lg font-bold border-2 border-emerald-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-100 bg-white"
+                placeholder="Nom de l'article"
+              />
+            ) : (
+              <>
+                <h3 className="font-bold text-lg text-gray-800 truncate mb-1">
+                  {item.nom}
+                </h3>
+                <p className="text-xs text-gray-500 font-medium">
+                  Stock disponible
+                </p>
+              </>
+            )}
           </div>
         </div>
 
@@ -76,7 +88,7 @@ export default function InventaireCard({ item, onEdit, onCancel, onSave, onDelet
             {/* Boutons d'action */}
             <div className="flex gap-2">
               <button
-                onClick={() => onEdit(item.id, item.quantite)}
+                onClick={() => onEdit(item.id, item.quantite, item.nom)}
                 className="flex-1 px-4 py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all font-semibold shadow-md hover:shadow-lg flex items-center justify-center gap-2 group"
               >
                 <Edit className="w-4 h-4 group-hover:rotate-12 transition-transform" />
