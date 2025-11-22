@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Loader2, Package, AlertCircle } from 'lucide-react';
 import Modal from '../ui/Modal';
-import { ajouterArticleInventaire } from '@/lib/firebaseAdmin';
+import { ajouterArticleInventaire, getInventaire } from '@/lib/firebaseAdmin';
 import { useMosquee } from '@/context/MosqueeContext'; // 🔥 AJOUTÉ
 
 export default function ModalAjouterArticle({ isOpen, onClose, onSuccess }) {
@@ -13,8 +13,7 @@ export default function ModalAjouterArticle({ isOpen, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     nom: '',
     quantite: '',
-    unite: 'kg',
-    seuil: ''
+    unite: 'kg'
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -38,27 +37,39 @@ export default function ModalAjouterArticle({ isOpen, onClose, onSuccess }) {
         throw new Error('Veuillez sélectionner une mosquée spécifique pour ajouter un article');
       }
 
-      if (!formData.nom || !formData.quantite || !formData.unite || !formData.seuil) {
+      if (!formData.nom || !formData.quantite || !formData.unite) {
         throw new Error('Veuillez remplir tous les champs');
       }
 
-      if (parseFloat(formData.quantite) <= 0 || parseFloat(formData.seuil) <= 0) {
-        throw new Error('Les quantités doivent être positives');
+      if (parseFloat(formData.quantite) <= 0) {
+        throw new Error('La quantité doit être positive');
       }
 
-      // 🔥 MODIFIÉ : Passer mosqueeActive
+      // 🔥 NOUVEAU : Vérifier les doublons
+      console.log('🔍 Vérification des doublons...');
+      const inventaireExistant = await getInventaire(mosqueeActive);
+      
+      const nomNormalise = formData.nom.trim().toLowerCase();
+      const articleExistant = inventaireExistant.find(
+        item => item.nom.trim().toLowerCase() === nomNormalise
+      );
+
+      if (articleExistant) {
+        throw new Error(`❌ Un article nommé "${articleExistant.nom}" existe déjà dans l'inventaire de cette mosquée`);
+      }
+
+      // 🔥 MODIFIÉ : Passer mosqueeActive avec seuil par défaut
       await ajouterArticleInventaire({
         nom: formData.nom.trim(),
         quantite: parseFloat(formData.quantite),
         unite: formData.unite,
-        seuil: parseFloat(formData.seuil)
+        seuil: 50 // Seuil par défaut
       }, mosqueeActive);
 
       setFormData({
         nom: '',
         quantite: '',
-        unite: 'kg',
-        seuil: ''
+        unite: 'kg'
       });
 
       if (onSuccess) {
@@ -153,25 +164,6 @@ export default function ModalAjouterArticle({ isOpen, onClose, onSuccess }) {
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Seuil d'alerte *
-          </label>
-          <input
-            type="number"
-            name="seuil"
-            value={formData.seuil}
-            onChange={handleChange}
-            min="0"
-            step="0.01"
-            placeholder="Ex: 100"
-            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-emerald-500 focus:outline-none"
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            Vous serez alerté quand le stock descendra sous ce seuil
-          </p>
-        </div>
-
         {error && (
           <div className="p-4 bg-red-50 border-2 border-red-200 rounded-lg">
             <p className="text-sm text-red-800">{error}</p>
@@ -187,11 +179,6 @@ export default function ModalAjouterArticle({ isOpen, onClose, onSuccess }) {
                 <p className="text-sm text-gray-600">
                   {formData.quantite} {formData.unite} disponibles
                 </p>
-                {formData.seuil && (
-                  <p className="text-xs text-gray-500">
-                    Alerte à {formData.seuil} {formData.unite}
-                  </p>
-                )}
               </div>
             </div>
           </div>

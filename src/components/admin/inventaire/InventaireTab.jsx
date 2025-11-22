@@ -47,6 +47,11 @@ export default function InventaireTab({ inventaire, setInventaire, beneficiaires
     setEditValue(currentQuantite.toString());
   };
 
+  const handleCancel = () => {
+    setEditingId(null);
+    setEditValue('');
+  };
+
   const handleSave = async (id) => {
     try {
       setIsRegenerating(true);
@@ -76,7 +81,8 @@ export default function InventaireTab({ inventaire, setInventaire, beneficiaires
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer cet article ? Cette action est irréversible.')) {
+    const confirmation = await confirm('Êtes-vous sûr de vouloir supprimer cet article ? Cette action est irréversible.');
+    if (!confirmation) {
       return;
     }
 
@@ -206,6 +212,7 @@ export default function InventaireTab({ inventaire, setInventaire, beneficiaires
               key={item.id}
               item={item}
               onEdit={handleEdit}
+              onCancel={handleCancel}
               onSave={handleSave}
               onDelete={handleDelete}
               editingId={editingId}
