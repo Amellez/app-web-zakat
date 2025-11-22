@@ -7,14 +7,21 @@ import { geolocaliserBeneficiaires, genererItinerairesAutomatiques } from '@/lib
 export default function ModalCreerItineraire({ isOpen, onClose, beneficiaires, mosqueeId, onSuccess }) {
   const [step, setStep] = useState(1); // 1: Config, 2: Géolocalisation, 3: Génération
   const [rayonKm, setRayonKm] = useState(3);
-  const [forceRegeneration, setForceRegeneration] = useState(false); // 🔥 NOUVEAU
+  const [forceRegeneration, setForceRegeneration] = useState(false);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0, percentage: 0 });
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
+  const [beneficiairesLocaux, setBeneficiairesLocaux] = useState([]); // ✅ State local
 
-  // Filtrer les bénéficiaires par mosqueeId
-  const beneficiairesMosquee = beneficiaires.filter(b => b.mosqueeId === mosqueeId);
+  // ✅ NOUVEAU : Mettre à jour les bénéficiaires locaux quand le modal s'ouvre
+  useEffect(() => {
+    if (isOpen) {
+      const beneficiairesMosquee = beneficiaires.filter(b => b.mosqueeId === mosqueeId);
+      setBeneficiairesLocaux(beneficiairesMosquee);
+      console.log('📋 Bénéficiaires locaux initialisés:', beneficiairesMosquee.length);
+    }
+  }, [isOpen, beneficiaires, mosqueeId]);
 
   const handleClose = () => {
     if (!loading) {
@@ -23,6 +30,7 @@ export default function ModalCreerItineraire({ isOpen, onClose, beneficiaires, m
       setResult(null);
       setForceRegeneration(false);
       setProgress({ current: 0, total: 0, percentage: 0 });
+      setBeneficiairesLocaux([]);
       onClose();
     }
   };
@@ -38,11 +46,13 @@ export default function ModalCreerItineraire({ isOpen, onClose, beneficiaires, m
       setError(null);
       setStep(2);
 
+      // ========================================
       // Étape 1: Géolocalisation
+      // ========================================
       console.log('📍 Étape 1: Géolocalisation...');
 
       const geoResult = await geolocaliserBeneficiaires(
-        beneficiairesMosquee,
+        beneficiairesLocaux,
         mosqueeId,
         (prog) => setProgress(prog)
       );
@@ -53,18 +63,37 @@ export default function ModalCreerItineraire({ isOpen, onClose, beneficiaires, m
 
       console.log(`✅ ${geoResult.count} bénéficiaires géolocalisés`);
 
-      // Petite pause pour que l'utilisateur voie le succès
+      // ✅ NOUVEAU : Mettre à jour les coords dans le state local
+      let benefsAvecCoords = [...beneficiairesLocaux];
+
+      if (geoResult.coordsMap && Object.keys(geoResult.coordsMap).length > 0) {
+        benefsAvecCoords = beneficiairesLocaux.map(b => {
+          if (geoResult.coordsMap[b.id]) {
+            console.log(`📍 Coords ajoutées pour ${b.nom}:`, geoResult.coordsMap[b.id]);
+            return { ...b, coords: geoResult.coordsMap[b.id] };
+          }
+          return b;
+        });
+        setBeneficiairesLocaux(benefsAvecCoords);
+        console.log('✅ Coords mises à jour dans le state local');
+      } else {
+        console.log('ℹ️ Aucune nouvelle coord, utilisation des coords existantes');
+      }
+
+      // Petite pause visuelle
       await new Promise(resolve => setTimeout(resolve, 1000));
 
+      // ========================================
       // Étape 2: Génération des itinéraires
+      // ========================================
       console.log('🚀 Étape 2: Génération des itinéraires...');
       setStep(3);
       setProgress({ current: 0, total: 0, percentage: 0 });
 
       const itineraireResult = await genererItinerairesAutomatiques(
-        beneficiairesMosquee,
+        benefsAvecCoords, // ✅ Utiliser les bénéficiaires avec coords mises à jour
         mosqueeId,
-        { rayonKm, forceRegeneration } // 🔥 Passer le paramètre
+        { rayonKm, forceRegeneration }
       );
 
       if (!itineraireResult.success) {
@@ -94,12 +123,12 @@ export default function ModalCreerItineraire({ isOpen, onClose, beneficiaires, m
   };
 
   // Statistiques des bénéficiaires éligibles
-  const benefsEligibles = beneficiairesMosquee.filter(b =>
+  const benefsEligibles = beneficiairesLocaux.filter(b =>
     (b.statut === 'Pack Attribué' || b.statut === 'Validé') &&
-    (!b.itineraireId || forceRegeneration) // 🔥 Inclure même ceux avec itineraireId si force
+    (!b.itineraireId || forceRegeneration)
   );
 
-  const benefsAvecItineraire = beneficiairesMosquee.filter(b => b.itineraireId);
+  const benefsAvecItineraire = beneficiairesLocaux.filter(b => b.itineraireId);
 
   const benefsSansCoords = benefsEligibles.filter(b =>
     !b.coords || !b.coords.lat || !b.coords.lng
@@ -154,7 +183,7 @@ export default function ModalCreerItineraire({ isOpen, onClose, beneficiaires, m
             <div className="bg-gray-50 rounded-lg p-4 space-y-2">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Bénéficiaires de votre mosquée:</span>
-                <span className="text-lg font-bold text-gray-800">{beneficiairesMosquee.length}</span>
+                <span className="text-lg font-bold text-gray-800">{beneficiairesLocaux.length}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Bénéficiaires éligibles:</span>
@@ -166,7 +195,7 @@ export default function ModalCreerItineraire({ isOpen, onClose, beneficiaires, m
               </div>
             </div>
 
-            {/* 🔥 NOUVEAU : Avertissement si des itinéraires existent déjà */}
+            {/* Avertissement si des itinéraires existent déjà */}
             {benefsAvecItineraire.length > 0 && !forceRegeneration && (
               <div className="bg-orange-50 border-2 border-orange-200 rounded-lg p-4">
                 <div className="flex items-start gap-3">
