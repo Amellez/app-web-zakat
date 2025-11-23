@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
-import { Navigation, MapPin, RefreshCw, Loader2, AlertCircle, Trash2 } from 'lucide-react';
+import { Navigation, MapPin, Loader2, AlertCircle, Trash2 } from 'lucide-react';
 import EmptyState from '../ui/EmptyState';
 import ItineraireCard from './ItineraireCard';
 import ModalCreerItineraire from './ModalCreerItineraire';
@@ -10,16 +10,16 @@ import {
   ecouterItineraires,
   supprimerTousLesItineraires
 } from '@/lib/itinerairesService';
-import { useMosquee } from '@/context/MosqueeContext'; // 🔥 CHANGÉ
+import { useMosquee } from '@/context/MosqueeContext';
 
 export default function ItinerairesTab({ beneficiaires }) {
-  const { mosqueeActive } = useMosquee(); // 🔥 CHANGÉ
+  const { mosqueeActive } = useMosquee();
   const [itineraires, setItineraires] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [viewMode, setViewMode] = useState('list'); // 'list' ou 'map'
 
-  // Charger les itinéraires au montage
+  // Charger les itinéraires au montage et écouter en temps réel
   useEffect(() => {
     if (!mosqueeActive) {
       console.error('Aucune mosquée active');
@@ -27,30 +27,28 @@ export default function ItinerairesTab({ beneficiaires }) {
       return;
     }
 
-    chargerItineraires();
+    // Chargement initial
+    const chargerInitial = async () => {
+      setLoading(true);
+      try {
+        const data = await getItineraires(mosqueeActive);
+        setItineraires(data);
+      } catch (error) {
+        console.error('Erreur chargement itinéraires:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    // Écouter les changements en temps réel avec filtre mosqueeId
+    chargerInitial();
+
+    // Écouter les changements en temps réel
     const unsubscribe = ecouterItineraires((data) => {
       setItineraires(data);
     }, mosqueeActive);
 
     return () => unsubscribe();
   }, [mosqueeActive]);
-
-  const chargerItineraires = async () => {
-    if (!mosqueeActive) return;
-    
-    setLoading(true);
-    try {
-      const data = await getItineraires(mosqueeActive);
-      setItineraires(data);
-    } catch (error) {
-      console.error('Erreur chargement itinéraires:', error);
-      alert('Erreur lors du chargement des itinéraires');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSupprimerTous = async () => {
     if (!confirm('⚠️ Êtes-vous sûr de vouloir supprimer TOUS les itinéraires de votre mosquée ? Cette action est irréversible.')) {
@@ -60,7 +58,6 @@ export default function ItinerairesTab({ beneficiaires }) {
     try {
       setLoading(true);
       await supprimerTousLesItineraires(mosqueeActive);
-      await chargerItineraires();
       alert('✅ Tous les itinéraires ont été supprimés');
     } catch (error) {
       console.error('Erreur suppression:', error);
@@ -68,6 +65,11 @@ export default function ItinerairesTab({ beneficiaires }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSuccessCreation = () => {
+    // Le listener temps réel mettra à jour automatiquement
+    // Pas besoin de recharger manuellement
   };
 
   // Statistiques
@@ -108,15 +110,6 @@ export default function ItinerairesTab({ beneficiaires }) {
         </div>
 
         <div className="flex gap-2">
-          <button
-            onClick={chargerItineraires}
-            disabled={loading || !mosqueeActive}
-            className="flex items-center gap-2 px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
-          >
-            <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-            Actualiser
-          </button>
-
           {itineraires.length > 0 && (
             <button
               onClick={handleSupprimerTous}
@@ -206,7 +199,7 @@ export default function ItinerairesTab({ beneficiaires }) {
             <ItineraireCard
               key={itineraire.id}
               itineraire={itineraire}
-              onUpdate={chargerItineraires}
+              onUpdate={handleSuccessCreation}
               mosqueeId={mosqueeActive}
             />
           ))}
@@ -221,7 +214,7 @@ export default function ItinerairesTab({ beneficiaires }) {
         onClose={() => setShowModal(false)}
         beneficiaires={beneficiaires}
         mosqueeId={mosqueeActive}
-        onSuccess={chargerItineraires}
+        onSuccess={handleSuccessCreation}
       />
     </div>
   );

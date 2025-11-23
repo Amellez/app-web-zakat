@@ -267,9 +267,6 @@ export default function DistributionPage() {
                         </div>
                         <div className="flex-1">
                           <h3 className="font-bold text-lg text-gray-800">{benef.nom}</h3>
-                          <p className="text-sm text-gray-600 mt-1">
-                            👥 {benef.nbPersonnes} personne{benef.nbPersonnes > 1 ? 's' : ''}
-                          </p>
                         </div>
                       </div>
                       <span className={`px-3 py-1 rounded-full text-xs font-semibold border-2 ${getStatutColor(benef.statutLivraison)}`}>
