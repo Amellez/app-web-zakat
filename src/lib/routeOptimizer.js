@@ -11,7 +11,13 @@ import { calculerDistance } from './geocoding';
  * @param {number} minPoints - Nombre minimum de points par cluster (défaut: 1)
  * @returns {Array<Array>} Tableau de clusters
  */
-export function creerClusters(beneficiaires, rayonKm = 3, minPoints = 1) {
+/**
+ * Algorithme DBSCAN simplifié pour regrouper les bénéficiaires par proximité
+ * @param {Array} beneficiaires - Liste des bénéficiaires avec coords
+ * @param {number} rayonKm - Rayon maximum en km (défaut: 3km)
+ * @returns {Array<Array>} Tableau de clusters
+ */
+export function creerClusters(beneficiaires, rayonKm = 3) {
   // Filtrer les bénéficiaires avec coordonnées valides
   const benefsAvecCoords = beneficiaires.filter(b =>
     b.coords && b.coords.lat && b.coords.lng
@@ -24,39 +30,44 @@ export function creerClusters(beneficiaires, rayonKm = 3, minPoints = 1) {
 
   console.log(`🔍 Clustering de ${benefsAvecCoords.length} bénéficiaires (rayon: ${rayonKm}km)`);
 
-  const visited = new Set();
   const clusters = [];
-  const noise = [];
+  const assigned = new Set(); // Track les bénéficiaires déjà assignés à un cluster
 
-  // DBSCAN Algorithm
+  // Pour chaque bénéficiaire non assigné
   benefsAvecCoords.forEach((point, idx) => {
-    if (visited.has(idx)) return;
+    if (assigned.has(point.id)) return; // Déjà dans un cluster
 
-    visited.add(idx);
-    const neighbors = getNeighbors(point, benefsAvecCoords, rayonKm);
+    // Trouver tous les voisins dans le rayon (y compris le point lui-même)
+    const cluster = [point];
+    assigned.add(point.id);
 
-    if (neighbors.length < minPoints) {
-      noise.push(point);
-    } else {
-      const cluster = [];
-      expandCluster(point, neighbors, cluster, visited, benefsAvecCoords, rayonKm, minPoints);
-      clusters.push(cluster);
+    // Chercher récursivement tous les voisins et leurs voisins
+    let i = 0;
+    while (i < cluster.length) {
+      const current = cluster[i];
+
+      // Trouver les voisins non assignés de ce point
+      benefsAvecCoords.forEach(other => {
+        if (assigned.has(other.id)) return;
+
+        const distance = calculerDistance(current.coords, other.coords);
+
+        if (distance <= rayonKm) {
+          cluster.push(other);
+          assigned.add(other.id);
+        }
+      });
+
+      i++;
     }
+
+    clusters.push(cluster);
   });
 
-  // ✅ CORRECTION : Ajouter les points isolés comme clusters individuels
-  // Cela garantit que tous les bénéficiaires sont dans un itinéraire
-  noise.forEach(point => {
-    clusters.push([point]);
-  });
+  const groupes = clusters.filter(c => c.length > 1).length;
+  const individuels = clusters.filter(c => c.length === 1).length;
 
-  console.log(`✅ ${clusters.length} clusters créés (dont ${noise.length} itinéraires individuels)`);
-
-  // S'assurer qu'on a au moins quelque chose (sécurité)
-  if (clusters.length === 0 && benefsAvecCoords.length > 0) {
-    console.warn('⚠️ Aucun cluster créé par DBSCAN, création d\'un cluster unique');
-    clusters.push(benefsAvecCoords);
-  }
+  console.log(`✅ ${clusters.length} itinéraires créés (${groupes} clusters groupés + ${individuels} itinéraires individuels)`);
 
   return clusters;
 }
@@ -94,7 +105,8 @@ function expandCluster(point, neighbors, cluster, visited, allPoints, rayonKm, m
       visited.add(neighborIdx);
       const neighborNeighbors = getNeighbors(neighbor.point, allPoints, rayonKm);
 
-      if (neighborNeighbors.length >= minPoints) {
+      // ✅ CORRECTION : Élargir le cluster si le voisin a lui-même des voisins
+      if (neighborNeighbors.length > 0) {
         neighbors.push(...neighborNeighbors);
       }
     }
@@ -170,35 +182,52 @@ function trouverPlusProche(coords, points) {
 
 /**
  * Calcule les statistiques d'un itinéraire
+ * ✅ MODIFIÉ : Ajoute la distance depuis la mosquée et gère les itinéraires individuels
+ * @param {Array} cluster - Liste optimisée de bénéficiaires
+ * @param {Object} coordsMosquee - Coordonnées de la mosquée (optionnel)
  */
-export function calculerStatistiquesItineraire(cluster) {
+export function calculerStatistiquesItineraire(cluster, coordsMosquee = null) {
   if (!cluster || cluster.length === 0) {
     return {
       nombreBeneficiaires: 0,
       distanceTotale: 0,
+      distanceDepuisMosquee: 0,
       tempsEstime: 0
     };
   }
 
   let distanceTotale = 0;
+  let distanceDepuisMosquee = 0;
 
-  // Calculer la distance totale
-  for (let i = 0; i < cluster.length - 1; i++) {
-    const distance = calculerDistance(
-      cluster[i].coords,
-      cluster[i + 1].coords
-    );
-    distanceTotale += distance;
+  // ✅ Calculer la distance mosquée → premier bénéficiaire
+  if (coordsMosquee && coordsMosquee.lat && coordsMosquee.lng && cluster[0]) {
+    distanceDepuisMosquee = calculerDistance(coordsMosquee, cluster[0].coords);
+  }
+
+  // ✅ NOUVEAU : Pour un itinéraire individuel (1 seul bénéficiaire)
+  // La distance totale = distance depuis la mosquée
+  if (cluster.length === 1) {
+    distanceTotale = distanceDepuisMosquee;
+  } else {
+    // Calculer la distance totale entre tous les bénéficiaires
+    for (let i = 0; i < cluster.length - 1; i++) {
+      const distance = calculerDistance(
+        cluster[i].coords,
+        cluster[i + 1].coords
+      );
+      distanceTotale += distance;
+    }
   }
 
   // Estimation du temps (10 min par livraison + temps de trajet)
   const tempsLivraison = cluster.length * 10; // 10 min par bénéficiaire
-  const tempsTrajet = distanceTotale * 3; // 3 min par km (vitesse moyenne en ville)
+  const tempsTrajet = (distanceTotale + distanceDepuisMosquee) * 3; // 3 min par km (vitesse moyenne en ville)
   const tempsEstime = Math.round(tempsLivraison + tempsTrajet);
 
   return {
     nombreBeneficiaires: cluster.length,
-    distanceTotale: Math.round(distanceTotale * 10) / 10, // Arrondi à 0.1 km
+    distanceTotale: Math.round(distanceTotale * 1000), // Convertir km en mètres
+    distanceDepuisMosquee: Math.round(distanceDepuisMosquee * 1000), // Convertir km en mètres
     tempsEstime // en minutes
   };
 }
@@ -209,7 +238,17 @@ export function calculerStatistiquesItineraire(cluster) {
 export function genererNomItineraire(cluster, index) {
   if (!cluster || cluster.length === 0) return `Itinéraire ${index + 1}`;
 
-  // Trouver la ville/quartier le plus fréquent
+  // ✅ Si c'est un itinéraire individuel (1 seul bénéficiaire)
+  if (cluster.length === 1) {
+    const benef = cluster[0];
+    const adresse = benef.adresse;
+    // Extraire la ville (dernière partie après la virgule)
+    const parts = adresse.split(',');
+    const ville = parts[parts.length - 1]?.trim() || '';
+    return ville ? `${ville} - ${benef.nom}` : `Individuel - ${benef.nom}`;
+  }
+
+  // Trouver la ville/quartier le plus fréquent pour les clusters groupés
   const adresses = cluster.map(b => b.adresse);
   const villes = adresses.map(a => {
     // Extraire la ville (dernière partie après la virgule)

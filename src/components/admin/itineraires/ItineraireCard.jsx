@@ -1,6 +1,6 @@
 'use client';
 import React, { useState } from 'react';
-import { Users, Navigation, Clock, Trash2, Copy, CheckCircle, QrCode } from 'lucide-react';
+import { Users, Navigation, Clock, Trash2, Copy, CheckCircle, QrCode, MapPin } from 'lucide-react';
 import { supprimerItineraire } from '@/lib/itinerairesService';
 
 export default function ItineraireCard({ itineraire, onUpdate, mosqueeId }) {
@@ -62,7 +62,7 @@ export default function ItineraireCard({ itineraire, onUpdate, mosqueeId }) {
         </div>
       </div>
 
-      {/* Code unique - NOUVEAU */}
+      {/* Code unique */}
       {itineraire.codeUnique && (
         <div className="bg-emerald-50 border-b-2 border-emerald-100 p-4">
           <div className="flex items-center justify-between">
@@ -97,7 +97,7 @@ export default function ItineraireCard({ itineraire, onUpdate, mosqueeId }) {
 
       {/* Statistiques */}
       <div className="p-4 space-y-3">
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <div className="bg-gray-50 rounded-lg p-3 text-center">
             <Users className="w-5 h-5 text-gray-600 mx-auto mb-1" />
             <p className="text-xs text-gray-600">Bénéficiaires</p>
@@ -105,15 +105,21 @@ export default function ItineraireCard({ itineraire, onUpdate, mosqueeId }) {
           </div>
 
           <div className="bg-gray-50 rounded-lg p-3 text-center">
-            <Navigation className="w-5 h-5 text-gray-600 mx-auto mb-1" />
-            <p className="text-xs text-gray-600">Distance</p>
-            <p className="text-lg font-bold text-gray-800">{stats.distanceTotale || 0} km</p>
-          </div>
-
-          <div className="bg-gray-50 rounded-lg p-3 text-center">
             <Clock className="w-5 h-5 text-gray-600 mx-auto mb-1" />
             <p className="text-xs text-gray-600">Temps</p>
             <p className="text-lg font-bold text-gray-800">{stats.tempsEstime || 0} min</p>
+          </div>
+
+          <div className="bg-emerald-50 rounded-lg p-3 text-center border-2 border-emerald-200">
+            <MapPin className="w-5 h-5 text-emerald-600 mx-auto mb-1" />
+            <p className="text-xs text-emerald-600 font-semibold">Depuis mosquée</p>
+            <p className="text-lg font-bold text-emerald-800">{stats.distanceDepuisMosquee || 0} m</p>
+          </div>
+
+          <div className="bg-gray-50 rounded-lg p-3 text-center">
+            <Navigation className="w-5 h-5 text-gray-600 mx-auto mb-1" />
+            <p className="text-xs text-gray-600">Distance parcours</p>
+            <p className="text-lg font-bold text-gray-800">{stats.distanceTotale || 0} m</p>
           </div>
         </div>
 
