@@ -41,7 +41,7 @@ export async function geocodeAdresse(adresse) {
     if (data && data.features && data.features.length > 0) {
       const result = data.features[0];
       const coords = result.geometry.coordinates; // [lng, lat]
-      
+
       return {
         lat: coords[1],
         lng: coords[0]
@@ -55,6 +55,12 @@ export async function geocodeAdresse(adresse) {
     console.error('❌ Erreur géolocalisation:', error);
     return null;
   }
+}
+/**
+ * ✅ NOUVEAU : Géolocalise une seule adresse avec délai (pour mosquée)
+ */
+export async function geocodeAdresseUnique(adresse) {
+  return await geocodeAdresse(adresse);
 }
 
 /**

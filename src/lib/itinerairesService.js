@@ -110,6 +110,50 @@ export async function genererItinerairesAutomatiques(beneficiaires, mosqueeId, o
       await supprimerTousLesItineraires(mosqueeId);
     }
 
+    // ✅ Récupérer et géolocaliser l'adresse de la mosquée
+    console.log('🕌 Récupération des coordonnées de la mosquée...');
+    let coordsMosquee = null;
+
+    try {
+      const mosqueeDoc = await getDoc(doc(db, 'mosquees', mosqueeId));
+
+      if (mosqueeDoc.exists()) {
+        const mosqueeData = mosqueeDoc.data();
+
+        // Vérifier si la mosquée a déjà des coordonnées
+        if (mosqueeData.coords && mosqueeData.coords.lat && mosqueeData.coords.lng) {
+          coordsMosquee = mosqueeData.coords;
+          console.log('✅ Coordonnées mosquée déjà disponibles');
+        } else if (mosqueeData.adresse) {
+          // Géolocaliser l'adresse de la mosquée
+          console.log(`🌍 Géolocalisation de la mosquée: ${mosqueeData.adresse}`);
+          const { geocodeAdresseUnique } = await import('./geocoding');
+          coordsMosquee = await geocodeAdresseUnique(mosqueeData.adresse);
+
+          if (coordsMosquee) {
+            // ✅ CORRECTION : Try-catch pour la sauvegarde des coords mosquée
+            try {
+              await updateDoc(doc(db, 'mosquees', mosqueeId), {
+                coords: coordsMosquee,
+                dateGeolocalisation: new Date().toISOString()
+              });
+              console.log('✅ Coordonnées mosquée sauvegardées');
+            } catch (updateError) {
+              console.warn('⚠️ Impossible de sauvegarder les coords de la mosquée (permissions insuffisantes)');
+              console.log('ℹ️ Les coordonnées seront utilisées pour cette génération uniquement');
+            }
+          } else {
+            console.warn('⚠️ Impossible de géolocaliser la mosquée');
+          }
+        }
+      } else {
+        console.warn('⚠️ Document mosquée non trouvé');
+      }
+    } catch (mosqueeError) {
+      console.warn('⚠️ Erreur lors de la récupération de la mosquée:', mosqueeError.message);
+      console.log('ℹ️ Génération des itinéraires sans coordonnées de mosquée');
+    }
+
     // 1. Filtrer les bénéficiaires éligibles
     const benefsEligibles = beneficiaires.filter(b =>
       (b.statut === 'Pack Attribué' || b.statut === 'Validé') &&
@@ -155,11 +199,11 @@ export async function genererItinerairesAutomatiques(beneficiaires, mosqueeId, o
     for (let i = 0; i < clusters.length; i++) {
       const cluster = clusters[i];
 
-      // Optimiser l'ordre de visite
-      const clusterOptimise = optimiserOrdreVisite(cluster);
+      // Optimiser l'ordre en passant les coordonnées de la mosquée
+      const clusterOptimise = optimiserOrdreVisite(cluster, coordsMosquee);
 
-      // Calculer les statistiques
-      const stats = calculerStatistiquesItineraire(clusterOptimise);
+      // Calculer les statistiques avec les coordonnées de la mosquée
+      const stats = calculerStatistiquesItineraire(clusterOptimise, coordsMosquee);
 
       // Générer le nom
       const nom = genererNomItineraire(clusterOptimise, i);
@@ -185,7 +229,7 @@ export async function genererItinerairesAutomatiques(beneficiaires, mosqueeId, o
           coords: b.coords,
           statutLivraison: 'En attente'
         })),
-        statistiques: stats,
+        statistiques: stats, // Contient distanceDepuisMosquee et distanceTotale
         dateCreation: new Date().toISOString(),
         dateModification: new Date().toISOString()
       };
