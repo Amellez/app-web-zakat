@@ -21,6 +21,17 @@ export const COEFFICIENTS_DEFAUT = {
 export const ARTICLES_FAVORIS = ['RIZ', 'PÂTES', 'COUSCOUS'];
 
 /**
+ * Détermine la taille de famille selon le nombre de personnes
+ * @param {number} nbPersonnes - Nombre de personnes dans la famille
+ * @returns {string} 'Petite', 'Moyenne' ou 'Grande'
+ */
+export function determinerTailleFamille(nbPersonnes) {
+  if (nbPersonnes <= 2) return 'Petite';
+  if (nbPersonnes <= 5) return 'Moyenne';
+  return 'Grande';
+}
+
+/**
  * Normalise le nom d'un article favori
  */
 export function normaliserArticleFavori(articleFavori) {

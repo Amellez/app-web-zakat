@@ -147,42 +147,6 @@ export default function ModalGenererPacks({ isOpen, onClose, onSuccess, inventai
             </div>
           </div>
 
-          {/* Répartition des articles favoris */}
-          <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-6">
-            <h3 className="font-bold text-gray-900 mb-4">📊 Répartition des articles favoris</h3>
-            <div className="grid grid-cols-2 gap-3">
-              {Object.entries(repartitionArticlesFavoris).map(([article, nombre]) => (
-                nombre > 0 && (
-                  <div key={article} className="flex justify-between items-center p-3 bg-white rounded-lg border border-gray-200">
-                    <span className="text-gray-700 font-medium">
-                      {article === 'RIZ' && '🍚'} 
-                      {article === 'PÂTES' && '🍝'} 
-                      {article === 'COUSCOUS' && '🥘'}
-                      {article === 'Non spécifié' && '❓'}
-                      {' '}{article}
-                    </span>
-                    <span className="font-bold text-gray-900">{nombre} familles</span>
-                  </div>
-                )
-              ))}
-            </div>
-          </div>
-
-          {/* Répartition par taille */}
-          <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-6">
-            <h3 className="font-bold text-gray-900 mb-4">👥 Répartition par taille de famille</h3>
-            <div className="grid grid-cols-3 gap-3">
-              {Object.entries(repartitionTailles).map(([taille, nombre]) => (
-                nombre > 0 && (
-                  <div key={taille} className="p-3 bg-white rounded-lg border border-gray-200 text-center">
-                    <div className="font-bold text-2xl text-gray-800">{nombre}</div>
-                    <div className="text-sm text-gray-600">{taille}</div>
-                  </div>
-                )
-              ))}
-            </div>
-          </div>
-
           {/* Aperçu de la distribution */}
           <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-lg p-6">
             <h3 className="font-bold text-emerald-900 mb-4">🎯 Logique de distribution</h3>

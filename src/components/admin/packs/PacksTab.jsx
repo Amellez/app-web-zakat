@@ -65,7 +65,8 @@ export default function PacksTab({ packs, setPacks, inventaire, beneficiaires })
 
   // Supprimer tous les packs
   const handleSupprimerTous = async () => {
-    if (!confirm('⚠️ Êtes-vous sûr de vouloir supprimer TOUS les packs ? Cette action est irréversible.')) {
+    const confirmation = await confirm('⚠️ Êtes-vous sûr de vouloir supprimer TOUS les packs ? Cette action est irréversible.');
+    if (!confirmation) {
       return;
     }
 

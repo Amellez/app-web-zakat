@@ -1,29 +1,32 @@
 'use client';
-
-import React, { useState } from 'react';
-import { Loader2, UserPlus, AlertCircle, CheckCircle } from 'lucide-react';
+import React, { useState, useCallback } from 'react';
+import { X, Loader2, MapPin, Search, CheckCircle, UserPlus, AlertCircle } from 'lucide-react';
 import Modal from '../ui/Modal';
 import { ajouterBeneficiaire } from '@/lib/firebaseAdmin';
-import { useMosquee } from '@/context/MosqueeContext'; // 🔥 AJOUTÉ
+import { useMosquee } from '@/context/MosqueeContext';
 
 export default function ModalAjouterBeneficiaire({ isOpen, onClose, onSuccess }) {
-  const { mosqueeActive, getMosqueeActiveData } = useMosquee(); // 🔥 AJOUTÉ
-  const mosqueeData = getMosqueeActiveData(); // 🔥 AJOUTÉ
+  const { mosqueeActive, getMosqueeActiveData } = useMosquee();
+  const mosqueeData = getMosqueeActiveData();
   
   const [formData, setFormData] = useState({
     nom: '',
-    articleFavori: '',
     email: '',
     telephone: '',
     adresse: '',
-    complementAdresse: '',
-    nbPersonnes: ''
+    nbPersonnes: 1,
+    articleFavori: 'RIZ',
+    statut: 'En attente'
   });
+  
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [searchingAddress, setSearchingAddress] = useState(false);
   const [addressSuggestions, setAddressSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [searchTimeout, setSearchTimeout] = useState(null);
+
+  // Départements Île-de-France
+  const IDF_DEPARTEMENTS = ['75', '77', '78', '91', '92', '93', '94', '95'];
 
   // Articles favoris disponibles
   const articlesFavoris = [
@@ -47,192 +50,141 @@ export default function ModalAjouterBeneficiaire({ isOpen, onClose, onSuccess })
     }
   ];
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+  // 🔥 FONCTION : Calculer automatiquement la taille de famille
+  const calculerTailleFamille = (nbPersonnes) => {
+    const nb = parseInt(nbPersonnes);
+    if (nb <= 2) return 'Petite';
+    if (nb <= 5) return 'Moyenne';
+    return 'Grande';
   };
 
-  // Recherche d'adresses avec autocomplétion (API Adresse Gouv.fr)
-  const searchAddress = async (query) => {
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const searchAddress = useCallback(async (query) => {
     if (!query || query.length < 3) {
       setAddressSuggestions([]);
       setShowSuggestions(false);
       return;
     }
 
-    setLoadingSuggestions(true);
-
+    setSearchingAddress(true);
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
       const response = await fetch(
-        `https://api-adresse.data.gouv.fr/search/?` +
-        `q=${encodeURIComponent(query)}&` +
-        `limit=8`
+        `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(query)}&limit=20`,
+        { signal: controller.signal }
       );
 
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error('Erreur de recherche');
+      }
+
       const data = await response.json();
-
-      // Filtrer pour garder uniquement Île-de-France (départements 75, 77, 78, 91, 92, 93, 94, 95)
-      const idfDepartments = ['75', '77', '78', '91', '92', '93', '94', '95'];
       
-      const suggestions = data.features
-        .filter(item => {
-          const postcode = item.properties.postcode || '';
-          const dept = postcode.substring(0, 2);
-          return idfDepartments.includes(dept);
-        })
-        .map(item => {
-          const props = item.properties;
-          return {
-            label: props.label,
-            name: props.name,
-            postcode: props.postcode,
-            city: props.city,
-            context: props.context,
-            formatted: props.label
-          };
-        });
+      const filteredFeatures = (data.features || []).filter(feature => {
+        const postcode = feature.properties.postcode;
+        if (!postcode) return false;
+        
+        const dept = postcode.substring(0, 2);
+        return IDF_DEPARTEMENTS.includes(dept);
+      }).slice(0, 5);
 
-      setAddressSuggestions(suggestions);
-      setShowSuggestions(suggestions.length > 0);
+      setAddressSuggestions(filteredFeatures);
+      setShowSuggestions(filteredFeatures.length > 0);
     } catch (error) {
-      console.error('Erreur recherche adresse:', error);
+      if (error.name === 'AbortError') {
+        console.log('Recherche annulée (timeout)');
+      } else {
+        console.error('Erreur recherche adresse:', error);
+      }
       setAddressSuggestions([]);
     } finally {
-      setLoadingSuggestions(false);
+      setSearchingAddress(false);
     }
-  };
+  }, []);
 
-  // Gestion de la saisie d'adresse avec debounce
   const handleAddressChange = (e) => {
-    const value = e.target.value;
     handleChange(e);
     
-    // Annuler le timeout précédent
-    if (window.addressTimeoutAdmin) {
-      clearTimeout(window.addressTimeoutAdmin);
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
     }
-    
-    // Attendre 500ms après que l'utilisateur ait fini de taper
-    window.addressTimeoutAdmin = setTimeout(() => {
-      searchAddress(value);
+
+    const newTimeout = setTimeout(() => {
+      searchAddress(e.target.value);
     }, 500);
+
+    setSearchTimeout(newTimeout);
   };
 
-  // Sélection d'une suggestion
-  const selectAddress = (suggestion) => {
+  const handleAddressSelect = (feature) => {
+    const address = feature.properties.label;
     setFormData(prev => ({
       ...prev,
-      adresse: suggestion.formatted
+      adresse: address
     }));
     setShowSuggestions(false);
     setAddressSuggestions([]);
   };
 
-  const getTailleFamille = (nb) => {
-    const n = parseInt(nb);
-    if (n <= 2) return 'Petite';
-    if (n <= 5) return 'Moyenne';
-    return 'Grande';
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!mosqueeActive) {
+      alert('Erreur: Aucune mosquée sélectionnée');
+      return;
+    }
+
     setLoading(true);
-    setError('');
 
     try {
-      // 🔥 VÉRIFICATION : S'assurer qu'une mosquée est active
-      if (!mosqueeActive || mosqueeActive === 'ALL') {
-        throw new Error('Veuillez sélectionner une mosquée spécifique pour ajouter un bénéficiaire');
-      }
-
-      // Validation basique
-      if (!formData.nom || !formData.articleFavori || !formData.email || !formData.telephone || !formData.adresse || !formData.nbPersonnes) {
-        throw new Error('Veuillez remplir tous les champs obligatoires');
-      }
-
-      // Validation email
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(formData.email)) {
-        throw new Error('Veuillez entrer une adresse email valide');
-      }
-
-      // Validation téléphone
-      const telRegex = /^[0-9\s\+\-\(\)]{10,}$/;
-      if (!telRegex.test(formData.telephone)) {
-        throw new Error('Veuillez entrer un numéro de téléphone valide');
-      }
-
-      const nbPersonnes = parseInt(formData.nbPersonnes);
-      if (isNaN(nbPersonnes) || nbPersonnes < 1) {
-        throw new Error('Le nombre de personnes doit être supérieur à 0');
-      }
-
-      // 🔥 MODIFIÉ : Ajouter mosqueeId et mosqueeName
-      const beneficiaire = {
-        nom: formData.nom,
-        articleFavori: formData.articleFavori,
-        email: formData.email,
-        telephone: formData.telephone,
-        adresse: formData.adresse,
-        complementAdresse: formData.complementAdresse || '',
-        nbPersonnes: nbPersonnes,
-        tailleFamille: getTailleFamille(nbPersonnes),
-        mosqueeId: mosqueeActive, // 🔥 AJOUTÉ
-        mosqueeName: mosqueeData?.nom || '', // 🔥 AJOUTÉ
-        mosqueeVille: mosqueeData?.ville || '', // 🔥 AJOUTÉ (optionnel)
-        attestations: {
-          musulman: true,
-          besoin: true,
-          veracite: true,
-          ileDeFrance: true
-        },
-        source: 'admin', // SOURCE ADMIN
-        statut: 'Validé', // DIRECTEMENT VALIDÉ
-        createdAt: new Date().toISOString()
+      // 🔥 AJOUTÉ : Calculer automatiquement la taille de famille
+      const tailleFamille = calculerTailleFamille(formData.nbPersonnes);
+      
+      const beneficiaireData = {
+        ...formData,
+        tailleFamille,
+        mosqueeId: mosqueeActive,
+        source: 'admin'
       };
 
-      console.log('🔥 Ajout bénéficiaire avec mosqueeId:', mosqueeActive);
-
-      // Envoyer à Firebase
-      await ajouterBeneficiaire(beneficiaire);
+      await ajouterBeneficiaire(beneficiaireData);
 
       // Réinitialiser le formulaire
       setFormData({
         nom: '',
-        articleFavori: '',
         email: '',
         telephone: '',
         adresse: '',
-        complementAdresse: '',
-        nbPersonnes: ''
+        nbPersonnes: 1,
+        articleFavori: 'RIZ',
+        statut: 'En attente'
       });
-      setAddressSuggestions([]);
-      setShowSuggestions(false);
 
-      // Callback de succès
-      if (onSuccess) {
-        onSuccess();
-      }
-
-      // Fermer la modal
+      onSuccess();
       onClose();
-
-    } catch (err) {
-      console.error('❌ Erreur ajout bénéficiaire:', err);
-      setError(err.message);
+    } catch (error) {
+      console.error('Erreur ajout:', error);
+      alert('Erreur lors de l\'ajout du bénéficiaire');
     } finally {
       setLoading(false);
     }
   };
 
-  // 🔥 AJOUTÉ : Message si pas de mosquée sélectionnée
+  // 🔥 AJOUTÉ : Calculer la taille affichée
+  const tailleFamilleCalculee = calculerTailleFamille(formData.nbPersonnes);
+
+  // 🔥 Message si pas de mosquée sélectionnée
   if (!mosqueeActive) {
     return (
-      <Modal isOpen={isOpen} onClose={onClose} title="Ajouter un Bénéficiaire sur Place" size="lg">
+      <Modal isOpen={isOpen} onClose={onClose} title="Ajouter un Bénéficiaire">
         <div className="p-8 text-center">
           <AlertCircle className="w-12 h-12 text-yellow-600 mx-auto mb-4" />
           <p className="text-gray-800 font-semibold mb-2">
@@ -247,8 +199,8 @@ export default function ModalAjouterBeneficiaire({ isOpen, onClose, onSuccess })
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Ajouter un Bénéficiaire sur Place" size="lg">
-      <form onSubmit={handleSubmit} className="space-y-6">
+    <Modal isOpen={isOpen} onClose={onClose} title="Ajouter un Bénéficiaire">
+      <form onSubmit={handleSubmit} className="space-y-4">
         {/* Info */}
         <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
@@ -257,27 +209,143 @@ export default function ModalAjouterBeneficiaire({ isOpen, onClose, onSuccess })
               Inscription sur place - {mosqueeData?.nom}
             </p>
             <p className="text-sm text-blue-700 mt-1">
-              Les bénéficiaires ajoutés ici sont automatiquement validés et marqués comme "Sur place"
+              Les bénéficiaires ajoutés ici sont marqués comme "Sur place"
             </p>
           </div>
         </div>
 
-        {/* Nom Complet */}
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Nom Complet *
+            Nom complet <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
             name="nom"
             value={formData.nom}
             onChange={handleChange}
-            placeholder="Ex: Ahmed Ben Mohamed"
-            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-emerald-500 focus:outline-none"
+            required
+            placeholder="Ex: Ahmed Benali"
+            className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 focus:outline-none"
           />
         </div>
 
-        {/* Article Favori */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Email <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              required
+              placeholder="exemple@email.com"
+              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Téléphone <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="tel"
+              name="telephone"
+              value={formData.telephone}
+              onChange={handleChange}
+              required
+              placeholder="06 12 34 56 78"
+              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 focus:outline-none"
+            />
+          </div>
+        </div>
+
+        <div className="relative">
+          <label className="block text-sm font-semibold text-gray-700 mb-2">
+            Adresse complète (Île-de-France uniquement) <span className="text-red-500">*</span>
+          </label>
+          <div className="relative">
+            <input
+              type="text"
+              name="adresse"
+              value={formData.adresse}
+              onChange={handleAddressChange}
+              onFocus={() => {
+                if (addressSuggestions.length > 0) {
+                  setShowSuggestions(true);
+                }
+              }}
+              required
+              placeholder="Ex: 12 rue de Paris, 75001 Paris"
+              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 focus:outline-none pr-10"
+            />
+            {searchingAddress && (
+              <Loader2 className="absolute right-3 top-3 w-5 h-5 text-gray-400 animate-spin" />
+            )}
+            {!searchingAddress && formData.adresse && (
+              <Search className="absolute right-3 top-3 w-5 h-5 text-gray-400" />
+            )}
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            📍 Départements: Paris (75), Seine-et-Marne (77), Yvelines (78), Essonne (91), Hauts-de-Seine (92), Seine-Saint-Denis (93), Val-de-Marne (94), Val-d'Oise (95)
+          </p>
+
+          {showSuggestions && addressSuggestions.length > 0 && (
+            <div className="absolute z-10 w-full mt-1 bg-white border-2 border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+              {addressSuggestions.map((feature, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleAddressSelect(feature)}
+                  className="w-full px-4 py-3 text-left hover:bg-emerald-50 border-b border-gray-100 last:border-b-0 flex items-start gap-2 transition"
+                >
+                  <MapPin className="w-4 h-4 text-emerald-600 mt-1 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-900 font-medium">
+                      {feature.properties.name}
+                    </p>
+                    <p className="text-xs text-gray-500 truncate">
+                      {feature.properties.postcode} {feature.properties.city}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+          
+          {!searchingAddress && showSuggestions && addressSuggestions.length === 0 && formData.adresse.length >= 3 && (
+            <div className="absolute z-10 w-full mt-1 bg-white border-2 border-yellow-300 rounded-lg shadow-lg p-4">
+              <p className="text-sm text-yellow-800">
+                ⚠️ Aucune adresse trouvée en Île-de-France. Vérifiez votre saisie.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* 🔥 MODIFIÉ : Affichage du nombre de personnes avec taille calculée */}
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">
+            Nombre de personnes <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="number"
+            name="nbPersonnes"
+            value={formData.nbPersonnes}
+            onChange={handleChange}
+            min="1"
+            required
+            className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 focus:outline-none"
+          />
+          <p className="text-xs text-emerald-600 mt-1 font-medium">
+            → Taille de famille: {tailleFamilleCalculee} 
+            {tailleFamilleCalculee === 'Petite' && ' (1-2 personnes)'}
+            {tailleFamilleCalculee === 'Moyenne' && ' (3-5 personnes)'}
+            {tailleFamilleCalculee === 'Grande' && ' (6+ personnes)'}
+          </p>
+        </div>
+
+        {/* 🔥 Design avec cartes pour l'article favori */}
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-3">
             Article Favori * 
@@ -285,7 +353,7 @@ export default function ModalAjouterBeneficiaire({ isOpen, onClose, onSuccess })
               (Le bénéficiaire recevra un supplément de cet article)
             </span>
           </label>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-3">
             {articlesFavoris.map(article => (
               <button
                 key={article.value}
@@ -299,7 +367,7 @@ export default function ModalAjouterBeneficiaire({ isOpen, onClose, onSuccess })
               >
                 <div className="text-center">
                   <div className="text-3xl mb-2">{article.emoji}</div>
-                  <div className="font-bold text-gray-800 mb-1">{article.label}</div>
+                  <div className="font-bold text-gray-800 text-sm mb-1">{article.label}</div>
                   <div className="text-xs text-gray-600">{article.description}</div>
                 </div>
                 {formData.articleFavori === article.value && (
@@ -312,170 +380,21 @@ export default function ModalAjouterBeneficiaire({ isOpen, onClose, onSuccess })
           </div>
         </div>
 
-        {/* Email et Téléphone sur la même ligne */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Adresse Email *
-            </label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="email@exemple.com"
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-emerald-500 focus:outline-none"
-            />
-          </div>
+        
 
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Téléphone *
-            </label>
-            <input
-              type="tel"
-              name="telephone"
-              value={formData.telephone}
-              onChange={handleChange}
-              placeholder="06 12 34 56 78"
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-emerald-500 focus:outline-none"
-            />
-          </div>
-        </div>
-
-        {/* Adresse avec autocomplétion */}
-        <div className="relative">
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Adresse Complète *
-          </label>
-          <input
-            type="text"
-            name="adresse"
-            value={formData.adresse}
-            onChange={handleAddressChange}
-            onFocus={() => setShowSuggestions(addressSuggestions.length > 0)}
-            placeholder="Commencez à taper l'adresse..."
-            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-emerald-500 focus:outline-none"
-            autoComplete="off"
-          />
-          {loadingSuggestions && (
-            <p className="text-xs text-gray-500 mt-1 flex items-center gap-2">
-              <Loader2 className="w-3 h-3 animate-spin" />
-              Recherche d'adresses...
-            </p>
-          )}
-          {!loadingSuggestions && (
-            <p className="text-xs text-gray-500 mt-1">
-              Tapez au moins 3 caractères pour voir les suggestions
-            </p>
-          )}
-          
-          {/* Liste des suggestions */}
-          {showSuggestions && addressSuggestions.length > 0 && (
-            <div className="absolute z-50 w-full mt-1 bg-white border-2 border-emerald-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-              {addressSuggestions.map((suggestion, index) => (
-                <button
-                  key={index}
-                  type="button"
-                  onClick={() => selectAddress(suggestion)}
-                  className="w-full text-left px-4 py-3 hover:bg-emerald-50 transition border-b border-gray-100 last:border-b-0"
-                >
-                  <p className="text-sm font-semibold text-gray-800">
-                    {suggestion.name}
-                  </p>
-                  <p className="text-xs text-gray-600 mt-1">
-                    {suggestion.postcode} {suggestion.city}
-                  </p>
-                </button>
-              ))}
-            </div>
-          )}
-          
-          {/* Message si pas de résultats */}
-          {showSuggestions && addressSuggestions.length === 0 && !loadingSuggestions && formData.adresse.length >= 3 && (
-            <div className="absolute z-50 w-full mt-1 bg-yellow-50 border-2 border-yellow-200 rounded-lg shadow-lg p-4">
-              <p className="text-sm text-yellow-800">
-                ⚠️ Aucune adresse trouvée en Île-de-France. Vérifiez l'orthographe ou entrez l'adresse manuellement.
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Complément d'adresse */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Complément d'adresse (optionnel)
-          </label>
-          <input
-            type="text"
-            name="complementAdresse"
-            value={formData.complementAdresse}
-            onChange={handleChange}
-            placeholder="Bâtiment, Étage, Porte..."
-            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-emerald-500 focus:outline-none"
-          />
-        </div>
-
-        {/* Nombre de Personnes */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Nombre de Personnes dans le Foyer *
-          </label>
-          <input
-            type="number"
-            name="nbPersonnes"
-            value={formData.nbPersonnes}
-            onChange={handleChange}
-            min="1"
-            placeholder="Ex: 5"
-            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-emerald-500 focus:outline-none"
-          />
-          {formData.nbPersonnes && (
-            <p className="text-sm text-emerald-600 mt-2 font-medium">
-              Catégorie: {getTailleFamille(formData.nbPersonnes)} famille
-            </p>
-          )}
-        </div>
-
-        {/* Message d'erreur */}
-        {error && (
-          <div className="p-4 bg-red-50 border-2 border-red-200 rounded-lg">
-            <p className="text-sm text-red-800">{error}</p>
-          </div>
-        )}
-
-        {/* Aperçu */}
-        {formData.nom && formData.articleFavori && formData.nbPersonnes && (
-          <div className="p-4 bg-emerald-50 border-2 border-emerald-200 rounded-lg">
-            <div className="flex items-center gap-3">
-              <UserPlus className="w-10 h-10 text-emerald-600" />
-              <div>
-                <p className="font-semibold text-gray-800">{formData.nom}</p>
-                <p className="text-sm text-gray-600">
-                  Article favori: {formData.articleFavori} • {formData.nbPersonnes} personnes ({getTailleFamille(formData.nbPersonnes)} famille)
-                </p>
-                <p className="text-xs text-emerald-600 font-medium mt-1">
-                  ✓ Sera automatiquement validé pour {mosqueeData?.nom}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Boutons */}
-        <div className="flex gap-4">
+        <div className="flex gap-3 pt-4">
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-semibold"
             disabled={loading}
+            className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-semibold disabled:opacity-50"
           >
             Annuler
           </button>
           <button
             type="submit"
             disabled={loading}
-            className="flex-1 px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="flex-1 px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {loading ? (
               <>
@@ -483,10 +402,7 @@ export default function ModalAjouterBeneficiaire({ isOpen, onClose, onSuccess })
                 Ajout en cours...
               </>
             ) : (
-              <>
-                <UserPlus className="w-5 h-5" />
-                Ajouter le bénéficiaire
-              </>
+              'Ajouter'
             )}
           </button>
         </div>

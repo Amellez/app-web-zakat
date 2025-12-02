@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Loader2, MapPin, Search } from 'lucide-react';
+import { X, Loader2, MapPin, Search, CheckCircle } from 'lucide-react';
 import Modal from '../ui/Modal';
 import { updateBeneficiaire } from '@/lib/firebaseAdmin';
 import { useMosquee } from '@/context/MosqueeContext';
@@ -13,7 +13,6 @@ export default function ModalModifierBeneficiaire({ isOpen, onClose, beneficiair
     telephone: '',
     adresse: '',
     nbPersonnes: 1,
-    tailleFamille: 'Petite',
     articleFavori: 'RIZ',
     statut: 'En attente'
   });
@@ -27,6 +26,36 @@ export default function ModalModifierBeneficiaire({ isOpen, onClose, beneficiair
   // Départements Île-de-France
   const IDF_DEPARTEMENTS = ['75', '77', '78', '91', '92', '93', '94', '95'];
 
+  // 🔥 Articles favoris avec le même design
+  const articlesFavoris = [
+    { 
+      value: 'RIZ', 
+      label: 'Riz', 
+      emoji: '🍚',
+      description: 'Supplément de riz' 
+    },
+    { 
+      value: 'PÂTES', 
+      label: 'Pâtes', 
+      emoji: '🍝',
+      description: 'Supplément de pâtes' 
+    },
+    { 
+      value: 'COUSCOUS', 
+      label: 'Couscous', 
+      emoji: '🥘',
+      description: 'Supplément de couscous' 
+    }
+  ];
+
+  // 🔥 FONCTION : Calculer automatiquement la taille de famille
+  const calculerTailleFamille = (nbPersonnes) => {
+    const nb = parseInt(nbPersonnes);
+    if (nb <= 2) return 'Petite';
+    if (nb <= 5) return 'Moyenne';
+    return 'Grande';
+  };
+
   useEffect(() => {
     if (beneficiaire) {
       setFormData({
@@ -35,7 +64,6 @@ export default function ModalModifierBeneficiaire({ isOpen, onClose, beneficiair
         telephone: beneficiaire.telephone || '',
         adresse: beneficiaire.adresse || '',
         nbPersonnes: beneficiaire.nbPersonnes || 1,
-        tailleFamille: beneficiaire.tailleFamille || 'Petite',
         articleFavori: beneficiaire.articleFavori || 'RIZ',
         statut: beneficiaire.statut || 'En attente'
       });
@@ -72,14 +100,13 @@ export default function ModalModifierBeneficiaire({ isOpen, onClose, beneficiair
 
       const data = await response.json();
       
-      // Filtrer uniquement les adresses d'Île-de-France
       const filteredFeatures = (data.features || []).filter(feature => {
         const postcode = feature.properties.postcode;
         if (!postcode) return false;
         
         const dept = postcode.substring(0, 2);
         return IDF_DEPARTEMENTS.includes(dept);
-      }).slice(0, 5); // Limiter à 5 résultats après filtrage
+      }).slice(0, 5);
 
       setAddressSuggestions(filteredFeatures);
       setShowSuggestions(filteredFeatures.length > 0);
@@ -130,7 +157,14 @@ export default function ModalModifierBeneficiaire({ isOpen, onClose, beneficiair
     setLoading(true);
 
     try {
-      await updateBeneficiaire(beneficiaire.id, formData, mosqueeActive);
+      // 🔥 AJOUTÉ : Calculer automatiquement la taille de famille
+      const tailleFamille = calculerTailleFamille(formData.nbPersonnes);
+      const dataToSubmit = {
+        ...formData,
+        tailleFamille
+      };
+
+      await updateBeneficiaire(beneficiaire.id, dataToSubmit, mosqueeActive);
       onSuccess();
       onClose();
     } catch (error) {
@@ -140,6 +174,9 @@ export default function ModalModifierBeneficiaire({ isOpen, onClose, beneficiair
       setLoading(false);
     }
   };
+
+  // 🔥 AJOUTÉ : Calculer la taille affichée
+  const tailleFamilleCalculee = calculerTailleFamille(formData.nbPersonnes);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Modifier le Bénéficiaire">
@@ -250,75 +287,64 @@ export default function ModalModifierBeneficiaire({ isOpen, onClose, beneficiair
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Nombre de personnes <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="number"
-              name="nbPersonnes"
-              value={formData.nbPersonnes}
-              onChange={handleChange}
-              min="1"
-              required
-              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 focus:outline-none"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Taille famille <span className="text-red-500">*</span>
-            </label>
-            <select
-              name="tailleFamille"
-              value={formData.tailleFamille}
-              onChange={handleChange}
-              required
-              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 focus:outline-none"
-            >
-              <option value="Petite">Petite (1-2)</option>
-              <option value="Moyenne">Moyenne (3-5)</option>
-              <option value="Grande">Grande (6+)</option>
-            </select>
-          </div>
-        </div>
-
+        {/* 🔥 MODIFIÉ : Affichage du nombre de personnes avec taille calculée */}
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Article favori <span className="text-red-500">*</span>
+            Nombre de personnes <span className="text-red-500">*</span>
           </label>
-          <select
-            name="articleFavori"
-            value={formData.articleFavori}
+          <input
+            type="number"
+            name="nbPersonnes"
+            value={formData.nbPersonnes}
             onChange={handleChange}
+            min="1"
             required
             className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 focus:outline-none"
-          >
-            <option value="RIZ">🍚 RIZ</option>
-            <option value="PÂTES">🍝 PÂTES</option>
-            <option value="COUSCOUS">🥘 COUSCOUS</option>
-          </select>
+          />
+          <p className="text-xs text-emerald-600 mt-1 font-medium">
+            → Taille de famille: {tailleFamilleCalculee} 
+            {tailleFamilleCalculee === 'Petite' && ' (1-2 personnes)'}
+            {tailleFamilleCalculee === 'Moyenne' && ' (3-5 personnes)'}
+            {tailleFamilleCalculee === 'Grande' && ' (6+ personnes)'}
+          </p>
         </div>
 
+        {/* 🔥 NOUVEAU : Design avec cartes pour l'article favori */}
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Statut <span className="text-red-500">*</span>
+          <label className="block text-sm font-semibold text-gray-700 mb-3">
+            Article Favori * 
+            <span className="text-xs font-normal text-gray-500 ml-2">
+              (Le bénéficiaire recevra un supplément de cet article)
+            </span>
           </label>
-          <select
-            name="statut"
-            value={formData.statut}
-            onChange={handleChange}
-            required
-            className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 focus:outline-none"
-          >
-            <option value="En attente">En attente</option>
-            <option value="Validé">Validé</option>
-            <option value="Refusé">Refusé</option>
-            <option value="Pack Attribué">Pack Attribué</option>
-            <option value="Livré">Livré</option>
-          </select>
+          <div className="grid grid-cols-3 gap-3">
+            {articlesFavoris.map(article => (
+              <button
+                key={article.value}
+                type="button"
+                onClick={() => setFormData(prev => ({ ...prev, articleFavori: article.value }))}
+                className={`relative p-4 rounded-xl border-2 transition-all ${
+                  formData.articleFavori === article.value
+                    ? 'border-emerald-500 bg-emerald-50 shadow-lg scale-105'
+                    : 'border-gray-200 hover:border-emerald-300 hover:bg-gray-50'
+                }`}
+              >
+                <div className="text-center">
+                  <div className="text-3xl mb-2">{article.emoji}</div>
+                  <div className="font-bold text-gray-800 text-sm mb-1">{article.label}</div>
+                  <div className="text-xs text-gray-600">{article.description}</div>
+                </div>
+                {formData.articleFavori === article.value && (
+                  <div className="absolute top-2 right-2">
+                    <CheckCircle className="w-5 h-5 text-emerald-600" />
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
+
+        
 
         <div className="flex gap-3 pt-4">
           <button

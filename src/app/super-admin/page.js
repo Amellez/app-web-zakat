@@ -142,9 +142,15 @@ export default function SuperAdminDashboard() {
   };
 
   const handleLogout = async () => {
-    if (confirm('Voulez-vous vraiment vous déconnecter ?')) {
-      await signOut(auth);
-      router.push('/login');
+    const confirmation = await confirm('Voulez-vous vraiment vous déconnecter ?');
+    if (confirmation) {
+      try {
+        await signOut(auth);
+        router.push('/login');
+      } catch (error) {
+        console.error('❌ Erreur déconnexion:', error);
+        alert('❌ Erreur lors de la déconnexion');
+      }
     }
   };
 
@@ -331,12 +337,7 @@ export default function SuperAdminDashboard() {
                         )}
                       </button>
 
-                      <button
-                        onClick={() => navigator.clipboard.writeText(`${window.location.origin}/inscription/${mosquee.id}`)}
-                        className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 font-semibold text-sm transition"
-                      >
-                        📋 Copier lien inscription
-                      </button>
+                      
                     </div>
                   </div>
                 </div>
