@@ -7,6 +7,17 @@ export default function ItineraireCard({ itineraire, onUpdate, mosqueeId }) {
   const [loading, setLoading] = useState(false);
   const [codeCopie, setCodeCopie] = useState(false);
 
+  // ✅ Fonction pour formater la distance intelligemment
+  const formaterDistance = (distanceEnMetres) => {
+    if (!distanceEnMetres || distanceEnMetres === 0) return '0 m';
+
+    if (distanceEnMetres < 1000) {
+      return `${Math.round(distanceEnMetres)} m`;
+    } else {
+      return `${(distanceEnMetres / 1000).toFixed(1)} km`;
+    }
+  };
+
   const handleSupprimer = async () => {
     if (!confirm(`Êtes-vous sûr de vouloir supprimer l'itinéraire "${itineraire.nom}" ?`)) {
       return;
@@ -113,13 +124,13 @@ export default function ItineraireCard({ itineraire, onUpdate, mosqueeId }) {
           <div className="bg-emerald-50 rounded-lg p-3 text-center border-2 border-emerald-200">
             <MapPin className="w-5 h-5 text-emerald-600 mx-auto mb-1" />
             <p className="text-xs text-emerald-600 font-semibold">Depuis mosquée</p>
-            <p className="text-lg font-bold text-emerald-800">{stats.distanceDepuisMosquee || 0} m</p>
+            <p className="text-lg font-bold text-emerald-800">{formaterDistance(stats.distanceDepuisMosquee)}</p>
           </div>
 
           <div className="bg-gray-50 rounded-lg p-3 text-center">
             <Navigation className="w-5 h-5 text-gray-600 mx-auto mb-1" />
             <p className="text-xs text-gray-600">Distance parcours</p>
-            <p className="text-lg font-bold text-gray-800">{stats.distanceTotale || 0} m</p>
+            <p className="text-lg font-bold text-gray-800">{formaterDistance(stats.distanceTotale)}</p>
           </div>
         </div>
 
