@@ -208,6 +208,19 @@ export async function genererEtSauvegarderPacks(mosqueeId) {
     console.log(`🎁 Packs suppléments: ${packsSupplements.length}`);
     console.log(`✅ Total: ${tousLesPacks.length}`);
     
+    // 🔥 AJOUTÉ : Réinitialiser les packId des bénéficiaires AVANT de supprimer les packs
+    console.log('🔄 Réinitialisation des packs attribués...');
+    const benefsAvecPacks = beneficiaires.filter(b => b.packId || b.packSupplementId);
+    for (const benef of benefsAvecPacks) {
+      await updateDoc(doc(db, 'beneficiaires', benef.id), {
+        packId: null,
+        packSupplementId: null,
+        statut: 'Validé',
+        dateAttribution: null
+      });
+    }
+    console.log(`✅ ${benefsAvecPacks.length} bénéficiaires réinitialisés`);
+    
     // Supprimer les anciens packs
     const anciensPacks = await getDocs(
       query(collection(db, 'packs'), where('mosqueeId', '==', mosqueeId))
@@ -235,7 +248,7 @@ export async function genererEtSauvegarderPacks(mosqueeId) {
     
     console.log('✅ Nouveaux packs sauvegardés avec succès');
     
-    // 🔥 AJOUTÉ : Appeler automatiquement l'attribution des packs
+    // 🔥 Attribution automatique des packs aux bénéficiaires
     console.log('🎯 Attribution automatique des packs aux bénéficiaires...');
     await attribuerPacksAuxBeneficiaires(mosqueeId);
     
