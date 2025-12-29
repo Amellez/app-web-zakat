@@ -2,10 +2,12 @@
 import React, { useState } from 'react';
 import { Users, Navigation, Clock, Trash2, Copy, CheckCircle, QrCode, MapPin } from 'lucide-react';
 import { supprimerItineraire } from '@/lib/itinerairesService';
+import ModalConfirmation from '../ui/ModalConfirmation';
 
 export default function ItineraireCard({ itineraire, onUpdate, mosqueeId }) {
   const [loading, setLoading] = useState(false);
   const [codeCopie, setCodeCopie] = useState(false);
+  const [showConfirmSupprimer, setShowConfirmSupprimer] = useState(false);
 
   // ✅ Fonction pour formater la distance intelligemment
   const formaterDistance = (distanceEnMetres) => {
@@ -18,16 +20,19 @@ export default function ItineraireCard({ itineraire, onUpdate, mosqueeId }) {
     }
   };
 
-  const handleSupprimer = async () => {
-    if (!confirm(`Êtes-vous sûr de vouloir supprimer l'itinéraire "${itineraire.nom}" ?`)) {
-      return;
-    }
+  const handleSupprimer = () => {
+    setShowConfirmSupprimer(true);
+  };
 
+  const handleConfirmSupprimer = async () => {
     try {
       setLoading(true);
       const beneficiairesIds = itineraire.beneficiaires.map(b => b.id);
       await supprimerItineraire(itineraire.id, beneficiairesIds, mosqueeId);
-      onUpdate();
+
+      if (onUpdate) {
+        onUpdate();
+      }
     } catch (error) {
       console.error('Erreur suppression:', error);
       alert('Erreur lors de la suppression');
@@ -187,6 +192,18 @@ export default function ItineraireCard({ itineraire, onUpdate, mosqueeId }) {
           </button>
         </div>
       </div>
+
+      {/* Modal de confirmation */}
+      <ModalConfirmation
+        isOpen={showConfirmSupprimer}
+        onClose={() => setShowConfirmSupprimer(false)}
+        onConfirm={handleConfirmSupprimer}
+        title="Supprimer l'itinéraire"
+        message={`Êtes-vous sûr de vouloir supprimer l'itinéraire "${itineraire.nom}" ? Les bénéficiaires seront libérés et pourront être réassignés.`}
+        confirmText="Supprimer"
+        cancelText="Annuler"
+        variant="danger"
+      />
     </div>
   );
 }

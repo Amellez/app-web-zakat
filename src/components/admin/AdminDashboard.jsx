@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation';
 import BeneficiairesTab from "./beneficiaires/BeneficiairesTab";
 import InventaireTab from "./inventaire/InventaireTab";
 import PacksTab from "./packs/PacksTab";
-import ItinerairesTab from "./itineraires/ItinerairesTab";
+import ItinerairesTabAvecVues from "./itineraires/ItinerairesTabAvecVues";
 import MosqueeSelector from "./ui/MosqueeSelector";
 import { getBeneficiaires, getInventaire, getPacks } from "@/lib/firebaseAdmin";
 
@@ -37,8 +37,8 @@ function ProfileMenu() {
           <p className="text-xs text-gray-500">{user?.email}</p>
           {userData?.role && (
             <p className="text-xs text-emerald-600 font-medium">
-              {userData.role === 'super_admin' ? 'Super Admin' : 
-               userData.role === 'admin_mosquee' ? 'Admin Mosquée' : 
+              {userData.role === 'super_admin' ? 'Super Admin' :
+               userData.role === 'admin_mosquee' ? 'Admin Mosquée' :
                'Bénévole'}
             </p>
           )}
@@ -73,8 +73,8 @@ function ProfileMenu() {
               <p className="text-xs text-gray-600 truncate">{user?.email}</p>
               {userData?.role && (
                 <span className="inline-block mt-2 px-2 py-1 bg-emerald-100 text-emerald-700 text-xs font-semibold rounded">
-                  {userData.role === 'super_admin' ? 'Super Admin' : 
-                   userData.role === 'admin_mosquee' ? 'Admin Mosquée' : 
+                  {userData.role === 'super_admin' ? 'Super Admin' :
+                   userData.role === 'admin_mosquee' ? 'Admin Mosquée' :
                    'Bénévole'}
                 </span>
               )}
@@ -107,7 +107,7 @@ function ProfileMenu() {
                 </svg>
                 <span className="text-sm font-medium text-gray-700">Paramètres</span>
               </button>
-              
+
               {/* Afficher "Gérer les Mosquées" seulement pour super_admin */}
               {userData?.role === 'super_admin' && (
                 <button
@@ -178,7 +178,7 @@ export default function AdminDashboard() {
       setBeneficiaires(dataBeneficiaires);
       setInventaire(dataInventaire);
       setPacks(dataPacks);
-      
+
       console.log('✅ Données chargées:', {
         mosqueeId: mosqueeActive,
         beneficiaires: dataBeneficiaires.length,
@@ -309,7 +309,7 @@ export default function AdminDashboard() {
               />
             )}
             {activeTab === "itineraires" && (
-              <ItinerairesTab beneficiaires={beneficiaires} />
+              <ItinerairesTabAvecVues beneficiaires={beneficiaires} />
             )}
           </>
         )}
