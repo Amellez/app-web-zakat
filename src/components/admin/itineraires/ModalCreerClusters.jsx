@@ -2,9 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import { X, MapPin, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import Modal from '../ui/Modal';
-import { geolocaliserBeneficiaires, genererItinerairesAutomatiques } from '@/lib/itinerairesService';
+import { geolocaliserBeneficiaires } from '@/lib/itinerairesService';
+import { genererClusters } from '@/lib/clustersService';
 
-export default function ModalCreerItineraire({ isOpen, onClose, beneficiaires, mosqueeId, onSuccess }) {
+export default function ModalCreerClusters({ isOpen, onClose, beneficiaires, mosqueeId, onSuccess }) {
   const [step, setStep] = useState(1); // 1: Config, 2: Géolocalisation, 3: Génération
   const [rayonKm, setRayonKm] = useState(1);
   const [forceRegeneration, setForceRegeneration] = useState(false);
@@ -12,9 +13,8 @@ export default function ModalCreerItineraire({ isOpen, onClose, beneficiaires, m
   const [progress, setProgress] = useState({ current: 0, total: 0, percentage: 0 });
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
-  const [beneficiairesLocaux, setBeneficiairesLocaux] = useState([]); // ✅ State local
+  const [beneficiairesLocaux, setBeneficiairesLocaux] = useState([]);
 
-  // ✅ NOUVEAU : Mettre à jour les bénéficiaires locaux quand le modal s'ouvre
   useEffect(() => {
     if (isOpen) {
       const beneficiairesMosquee = beneficiaires.filter(b => b.mosqueeId === mosqueeId);
@@ -46,9 +46,7 @@ export default function ModalCreerItineraire({ isOpen, onClose, beneficiaires, m
       setError(null);
       setStep(2);
 
-      // ========================================
       // Étape 1: Géolocalisation
-      // ========================================
       console.log('📍 Étape 1: Géolocalisation...');
 
       const geoResult = await geolocaliserBeneficiaires(
@@ -63,48 +61,41 @@ export default function ModalCreerItineraire({ isOpen, onClose, beneficiaires, m
 
       console.log(`✅ ${geoResult.count} bénéficiaires géolocalisés`);
 
-      // ✅ NOUVEAU : Mettre à jour les coords dans le state local
+      // Mettre à jour les coords dans le state local
       let benefsAvecCoords = [...beneficiairesLocaux];
 
       if (geoResult.coordsMap && Object.keys(geoResult.coordsMap).length > 0) {
         benefsAvecCoords = beneficiairesLocaux.map(b => {
           if (geoResult.coordsMap[b.id]) {
-            console.log(`📍 Coords ajoutées pour ${b.nom}:`, geoResult.coordsMap[b.id]);
             return { ...b, coords: geoResult.coordsMap[b.id] };
           }
           return b;
         });
         setBeneficiairesLocaux(benefsAvecCoords);
-        console.log('✅ Coords mises à jour dans le state local');
-      } else {
-        console.log('ℹ️ Aucune nouvelle coord, utilisation des coords existantes');
       }
 
-      // Petite pause visuelle
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // ========================================
-      // Étape 2: Génération des itinéraires
-      // ========================================
-      console.log('🚀 Étape 2: Génération des itinéraires...');
+      // Étape 2: Génération des clusters
+      console.log('🚀 Étape 2: Génération des clusters...');
       setStep(3);
       setProgress({ current: 0, total: 0, percentage: 0 });
 
-      const itineraireResult = await genererItinerairesAutomatiques(
-        benefsAvecCoords, // ✅ Utiliser les bénéficiaires avec coords mises à jour
+      const clusterResult = await genererClusters(
+        benefsAvecCoords,
         mosqueeId,
         { rayonKm, forceRegeneration }
       );
 
-      if (!itineraireResult.success) {
-        throw new Error('Erreur lors de la génération des itinéraires');
+      if (!clusterResult.success) {
+        throw new Error('Erreur lors de la génération des clusters');
       }
 
-      console.log('✅ Itinéraires générés avec succès');
+      console.log('✅ Clusters générés avec succès');
 
       setResult({
-        nombreItineraires: itineraireResult.nombreItineraires,
-        nombreBeneficiaires: itineraireResult.nombreBeneficiaires,
+        nombreClusters: clusterResult.nombreClusters,
+        nombreBeneficiaires: clusterResult.nombreBeneficiaires,
         geolocalisations: geoResult.count
       });
 
@@ -125,7 +116,7 @@ export default function ModalCreerItineraire({ isOpen, onClose, beneficiaires, m
   // Statistiques des bénéficiaires éligibles
   const benefsEligibles = beneficiairesLocaux.filter(b =>
     (b.statut === 'Pack Attribué' || b.statut === 'Validé') &&
-    (!b.itineraireId || forceRegeneration)
+    !b.itineraireId
   );
 
   const benefsAvecItineraire = beneficiairesLocaux.filter(b => b.itineraireId);
@@ -134,7 +125,6 @@ export default function ModalCreerItineraire({ isOpen, onClose, beneficiaires, m
     !b.coords || !b.coords.lat || !b.coords.lng
   );
 
-  // Vérification mosqueeId
   if (!mosqueeId) {
     return (
       <Modal isOpen={isOpen} onClose={handleClose} title="Erreur">
@@ -143,7 +133,7 @@ export default function ModalCreerItineraire({ isOpen, onClose, beneficiaires, m
           <div>
             <p className="text-sm font-semibold text-red-800">mosqueeId manquant</p>
             <p className="text-sm text-red-700 mt-1">
-              Impossible de créer des itinéraires sans mosqueeId.
+              Impossible de créer des clusters sans mosqueeId.
             </p>
           </div>
         </div>
@@ -152,7 +142,7 @@ export default function ModalCreerItineraire({ isOpen, onClose, beneficiaires, m
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="Créer des Itinéraires Optimisés">
+    <Modal isOpen={isOpen} onClose={handleClose} title="Créer des Clusters Géographiques">
       <div className="space-y-6">
         {step === 1 && (
           <>
@@ -162,12 +152,13 @@ export default function ModalCreerItineraire({ isOpen, onClose, beneficiaires, m
                 <MapPin className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-sm font-semibold text-blue-800 mb-2">
-                    Création automatique d'itinéraires
+                    Création automatique de clusters
                   </p>
                   <ul className="text-sm text-blue-700 space-y-1">
                     <li>• Géolocalisation automatique des adresses</li>
                     <li>• Regroupement par proximité géographique</li>
                     <li>• Optimisation de l'ordre des visites</li>
+                    <li>• Vous pourrez ensuite assigner manuellement les bénéficiaires</li>
                   </ul>
                 </div>
               </div>
@@ -195,29 +186,18 @@ export default function ModalCreerItineraire({ isOpen, onClose, beneficiaires, m
               </div>
             </div>
 
-            {/* Avertissement si des itinéraires existent déjà */}
-            {benefsAvecItineraire.length > 0 && !forceRegeneration && (
+            {/* Avertissement si des bénéficiaires ont déjà un itinéraire */}
+            {benefsAvecItineraire.length > 0 && (
               <div className="bg-orange-50 border-2 border-orange-200 rounded-lg p-4">
                 <div className="flex items-start gap-3">
                   <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-orange-800 mb-2">
-                      ⚠️ {benefsAvecItineraire.length} bénéficiaire(s) ont déjà un itinéraire
+                      ℹ️ {benefsAvecItineraire.length} bénéficiaire(s) déjà assigné(s)
                     </p>
-                    <p className="text-sm text-orange-700 mb-3">
-                      Ces bénéficiaires seront ignorés. Cochez l'option ci-dessous pour les réassigner.
+                    <p className="text-sm text-orange-700">
+                      Ces bénéficiaires ont déjà été assignés à un itinéraire et seront ignorés.
                     </p>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={forceRegeneration}
-                        onChange={(e) => setForceRegeneration(e.target.checked)}
-                        className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
-                      />
-                      <span className="text-sm font-medium text-orange-800">
-                        Régénérer tous les itinéraires (supprime les anciens)
-                      </span>
-                    </label>
                   </div>
                 </div>
               </div>
@@ -252,8 +232,28 @@ export default function ModalCreerItineraire({ isOpen, onClose, beneficiaires, m
                 className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 focus:outline-none"
               />
               <p className="text-xs text-gray-500 mt-1">
-                Les bénéficiaires dans ce rayon seront regroupés dans le même itinéraire
+                Les bénéficiaires dans ce rayon seront regroupés dans le même cluster
               </p>
+            </div>
+
+            {/* Option de régénération */}
+            <div className="bg-amber-50 border-2 border-amber-200 rounded-lg p-4">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={forceRegeneration}
+                  onChange={(e) => setForceRegeneration(e.target.checked)}
+                  className="w-5 h-5 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 mt-0.5"
+                />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-amber-800">
+                    Supprimer les clusters existants avant de créer de nouveaux
+                  </p>
+                  <p className="text-xs text-amber-700 mt-1">
+                    ⚠️ Cette action supprimera tous vos clusters actuels. Laissez décoché si vous voulez conserver les clusters existants.
+                  </p>
+                </div>
+              </label>
             </div>
 
             {/* Boutons */}
@@ -269,7 +269,7 @@ export default function ModalCreerItineraire({ isOpen, onClose, beneficiaires, m
                 disabled={benefsEligibles.length === 0}
                 className="flex-1 px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Générer les itinéraires
+                Générer les clusters
               </button>
             </div>
           </>
@@ -297,7 +297,6 @@ export default function ModalCreerItineraire({ isOpen, onClose, beneficiaires, m
               </p>
             </div>
 
-            {/* Barre de progression */}
             {progress.total > 0 && (
               <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
                 <div
@@ -314,10 +313,10 @@ export default function ModalCreerItineraire({ isOpen, onClose, beneficiaires, m
             <div className="text-center">
               <Loader2 className="w-12 h-12 animate-spin text-emerald-600 mx-auto mb-4" />
               <h3 className="text-lg font-bold text-gray-800 mb-2">
-                Génération des itinéraires...
+                Génération des clusters...
               </h3>
               <p className="text-sm text-gray-600">
-                Création des clusters et optimisation des routes
+                Création des groupes géographiques et optimisation
               </p>
             </div>
           </div>
@@ -328,17 +327,17 @@ export default function ModalCreerItineraire({ isOpen, onClose, beneficiaires, m
             <div className="text-center mb-6">
               <CheckCircle className="w-16 h-16 text-green-600 mx-auto mb-4" />
               <h3 className="text-xl font-bold text-gray-800 mb-2">
-                Itinéraires créés avec succès !
+                Clusters créés avec succès !
               </h3>
             </div>
 
             <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4 space-y-2">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-700">Itinéraires créés:</span>
-                <span className="text-lg font-bold text-green-700">{result.nombreItineraires}</span>
+                <span className="text-sm text-gray-700">Clusters créés:</span>
+                <span className="text-lg font-bold text-green-700">{result.nombreClusters}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-700">Bénéficiaires assignés:</span>
+                <span className="text-sm text-gray-700">Bénéficiaires regroupés:</span>
                 <span className="text-lg font-bold text-green-700">{result.nombreBeneficiaires}</span>
               </div>
               {result.geolocalisations > 0 && (
@@ -347,6 +346,12 @@ export default function ModalCreerItineraire({ isOpen, onClose, beneficiaires, m
                   <span className="text-lg font-bold text-green-700">{result.geolocalisations}</span>
                 </div>
               )}
+            </div>
+
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-blue-800">
+                ℹ️ <strong>Prochaine étape :</strong> Vous pouvez maintenant sélectionner les bénéficiaires à assigner dans chaque cluster.
+              </p>
             </div>
 
             <p className="text-sm text-center text-gray-600">

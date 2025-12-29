@@ -19,7 +19,7 @@ export default function ItinerairesTab({ beneficiaires }) {
   const [showModal, setShowModal] = useState(false);
   const [viewMode, setViewMode] = useState('list'); // 'list' ou 'map'
 
-  // Charger les itinéraires au montage et écouter en temps réel
+  // Charger les itinéraires au montage
   useEffect(() => {
     if (!mosqueeActive) {
       console.error('Aucune mosquée active');
@@ -27,37 +27,36 @@ export default function ItinerairesTab({ beneficiaires }) {
       return;
     }
 
-    // Chargement initial
-    const chargerInitial = async () => {
-      setLoading(true);
-      try {
-        const data = await getItineraires(mosqueeActive);
-        setItineraires(data);
-      } catch (error) {
-        console.error('Erreur chargement itinéraires:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    chargerInitial();
-
-    // Écouter les changements en temps réel
-    const unsubscribe = ecouterItineraires((data) => {
-      setItineraires(data);
-    }, mosqueeActive);
-
-    return () => unsubscribe();
+    chargerItineraires();
   }, [mosqueeActive]);
 
+  // ✅ NOUVEAU : Fonction pour charger/recharger les itinéraires
+  const chargerItineraires = async () => {
+    setLoading(true);
+    try {
+      const data = await getItineraires(mosqueeActive);
+      setItineraires(data);
+    } catch (error) {
+      console.error('Erreur chargement itinéraires:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSupprimerTous = async () => {
-    if (!confirm('⚠️ Êtes-vous sûr de vouloir supprimer TOUS les itinéraires de votre mosquée ? Cette action est irréversible.')) {
+    const confirmation = window.confirm('⚠️ Êtes-vous sûr de vouloir supprimer TOUS les itinéraires de votre mosquée ? Cette action est irréversible.');
+
+    if (!confirmation) {
       return;
     }
 
     try {
       setLoading(true);
       await supprimerTousLesItineraires(mosqueeActive);
+
+      // Recharger les données
+      await chargerItineraires();
+
       alert('✅ Tous les itinéraires ont été supprimés');
     } catch (error) {
       console.error('Erreur suppression:', error);
@@ -68,8 +67,14 @@ export default function ItinerairesTab({ beneficiaires }) {
   };
 
   const handleSuccessCreation = () => {
-    // Le listener temps réel mettra à jour automatiquement
-    // Pas besoin de recharger manuellement
+    // Recharger les données après création
+    chargerItineraires();
+  };
+
+  // ✅ SIMPLIFIÉ : Callback après suppression d'un itinéraire
+  const handleSuppressionItineraire = () => {
+    // Recharger les données
+    chargerItineraires();
   };
 
   // Statistiques
@@ -199,7 +204,7 @@ export default function ItinerairesTab({ beneficiaires }) {
             <ItineraireCard
               key={itineraire.id}
               itineraire={itineraire}
-              onUpdate={handleSuccessCreation}
+              onUpdate={handleSuppressionItineraire}
               mosqueeId={mosqueeActive}
             />
           ))}

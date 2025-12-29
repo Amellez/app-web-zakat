@@ -200,22 +200,31 @@ export function calculerStatistiquesItineraire(cluster, coordsMosquee = null) {
   let distanceDepuisMosquee = 0;
 
   // ✅ Calculer la distance mosquée → premier bénéficiaire
-  if (coordsMosquee && coordsMosquee.lat && coordsMosquee.lng && cluster[0]) {
-    distanceDepuisMosquee = calculerDistance(coordsMosquee, cluster[0].coords);
+  if (coordsMosquee && coordsMosquee.lat && coordsMosquee.lng && cluster[0] && cluster[0].coords) {
+    try {
+      distanceDepuisMosquee = calculerDistance(coordsMosquee, cluster[0].coords);
+    } catch (error) {
+      console.warn('⚠️ Erreur calcul distance depuis mosquée:', error);
+      distanceDepuisMosquee = 0;
+    }
   }
 
-  // ✅ NOUVEAU : Pour un itinéraire individuel (1 seul bénéficiaire)
+  // ✅ Pour un itinéraire individuel (1 seul bénéficiaire)
   // La distance totale = distance depuis la mosquée
   if (cluster.length === 1) {
     distanceTotale = distanceDepuisMosquee;
   } else {
     // Calculer la distance totale entre tous les bénéficiaires
     for (let i = 0; i < cluster.length - 1; i++) {
-      const distance = calculerDistance(
-        cluster[i].coords,
-        cluster[i + 1].coords
-      );
-      distanceTotale += distance;
+      try {
+        const distance = calculerDistance(
+          cluster[i].coords,
+          cluster[i + 1].coords
+        );
+        distanceTotale += distance;
+      } catch (error) {
+        console.warn(`⚠️ Erreur calcul distance entre bénéficiaires ${i} et ${i+1}:`, error);
+      }
     }
   }
 
