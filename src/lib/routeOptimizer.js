@@ -247,36 +247,29 @@ export function calculerStatistiquesItineraire(cluster, coordsMosquee = null) {
 export function genererNomItineraire(cluster, index) {
   if (!cluster || cluster.length === 0) return `Itinéraire ${index + 1}`;
 
-  // ✅ Si c'est un itinéraire individuel (1 seul bénéficiaire)
-  if (cluster.length === 1) {
-    const benef = cluster[0];
-    const adresse = benef.adresse;
-    // Extraire la ville (dernière partie après la virgule)
+  const premierBenef = cluster[0];
+  const adresse = premierBenef.adresse;
+
+  // Si l'adresse contient des virgules, utiliser la dernière partie
+  if (adresse.includes(',')) {
     const parts = adresse.split(',');
-    const ville = parts[parts.length - 1]?.trim() || '';
-    return ville ? `${ville} - ${benef.nom}` : `Individuel - ${benef.nom}`;
+    return parts[parts.length - 1]?.trim() || `Itinéraire ${index + 1}`;
   }
 
-  // Trouver la ville/quartier le plus fréquent pour les clusters groupés
-  const adresses = cluster.map(b => b.adresse);
-  const villes = adresses.map(a => {
-    // Extraire la ville (dernière partie après la virgule)
-    const parts = a.split(',');
-    return parts[parts.length - 1]?.trim() || '';
-  });
+  // Sinon, extraire les 2 derniers mots (code postal + ville)
+  // Ex: "69 Av du Professeur Emile Sergent 78680 Épône" → "Épône"
+  const mots = adresse.trim().split(/\s+/); // Split par espaces
 
-  // Compter les occurrences
-  const villeFrequente = villes.reduce((acc, ville) => {
-    if (!ville) return acc;
-    acc[ville] = (acc[ville] || 0) + 1;
-    return acc;
-  }, {});
+  // Si on a au moins 2 mots, prendre le dernier (la ville)
+  if (mots.length >= 2) {
+    // Vérifier si l'avant-dernier mot est un code postal (5 chiffres)
+    const avantDernier = mots[mots.length - 2];
+    if (/^\d{5}$/.test(avantDernier)) {
+      // C'est bien un code postal, retourner juste la ville (dernier mot)
+      return mots[mots.length - 1];
+    }
+  }
 
-  const villePrincipale = Object.keys(villeFrequente).reduce((a, b) =>
-    villeFrequente[a] > villeFrequente[b] ? a : b
-  , '');
-
-  return villePrincipale
-    ? `${villePrincipale} (${cluster.length} bénéf.)`
-    : `Itinéraire ${index + 1}`;
+  // Sinon retourner le dernier mot
+  return mots[mots.length - 1] || `Itinéraire ${index + 1}`;
 }

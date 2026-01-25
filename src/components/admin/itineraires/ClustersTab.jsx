@@ -4,6 +4,7 @@ import { Layers, MapPin, Loader2, AlertCircle, Trash2, Users } from 'lucide-reac
 import EmptyState from '../ui/EmptyState';
 import ClusterCard from './ClusterCard';
 import ModalCreerClusters from './ModalCreerClusters';
+import ModalDetailCluster from './ModalDetailCluster';
 import ModalAssignerItineraire from './ModalAssignerItineraire';
 import ModalConfirmation from '../ui/ModalConfirmation';
 import { getClusters, supprimerTousClusters } from '@/lib/clustersService';
@@ -14,6 +15,8 @@ export default function ClustersTab({ beneficiaires }) {
   const [clusters, setClusters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showModalDetail, setShowModalDetail] = useState(false);
+  const [clusterSelectionne, setClusterSelectionne] = useState(null);
   const [showModalAssignation, setShowModalAssignation] = useState(false);
   const [showConfirmSupprimer, setShowConfirmSupprimer] = useState(false);
   const [selection, setSelection] = useState([]); // IDs des bénéficiaires sélectionnés
@@ -67,11 +70,16 @@ export default function ClustersTab({ beneficiaires }) {
     chargerClusters();
   };
 
-  const handleSuccessAssignation = () => {
-    setSelection([]);
-    chargerClusters();
-  };
+ const handleSuccessAssignation = () => {
+  setSelection([]);
+  setShowModalDetail(false);
+  chargerClusters();
+};
 
+const handleOpenCluster = (cluster) => {
+  setClusterSelectionne(cluster);
+  setShowModalDetail(true);
+};
   // Gestion de la sélection
   const handleToggleBeneficiaire = (beneficiaireId) => {
     setSelection(prev => {
@@ -242,8 +250,7 @@ export default function ClustersTab({ beneficiaires }) {
               key={cluster.id}
               cluster={cluster}
               selection={selection}
-              onToggleBeneficiaire={handleToggleBeneficiaire}
-              onToggleAll={handleSelectionnerTout}
+              onOpenCluster={handleOpenCluster}
             />
           ))}
         </div>
@@ -256,6 +263,17 @@ export default function ClustersTab({ beneficiaires }) {
         beneficiaires={beneficiaires}
         mosqueeId={mosqueeActive}
         onSuccess={handleSuccessCreation}
+      />
+
+      {/* Modal détail cluster */}
+      <ModalDetailCluster
+        isOpen={showModalDetail}
+        onClose={() => setShowModalDetail(false)}
+        cluster={clusterSelectionne}
+        selection={selection}
+        onToggleBeneficiaire={handleToggleBeneficiaire}
+        onToggleAll={handleSelectionnerTout}
+        onAssignerSelection={handleAssignerSelection}
       />
 
       {/* Modal d'assignation */}

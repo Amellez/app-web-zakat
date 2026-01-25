@@ -14,11 +14,11 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' })
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Overlay */}
-      <div 
-        className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+      <div
+        className="fixed inset-0 bg-white bg-opacity-10 transition-opacity"
         onClick={onClose}
       />
-      
+
       {/* Modal */}
       <div className={`relative bg-white rounded-2xl shadow-2xl ${sizeClasses[size]} w-full max-h-[90vh] overflow-hidden`}>
         {/* Header */}
@@ -31,7 +31,7 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' })
             <X className="w-6 h-6 text-gray-600" />
           </button>
         </div>
-        
+
         {/* Content */}
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
           {children}

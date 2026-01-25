@@ -147,7 +147,9 @@ export async function genererClusters(beneficiaires, mosqueeId, options = {}) {
       const stats = calculerStatistiquesItineraire(clusterOptimise, coordsMosquee);
 
       // Générer le nom
+      // Générer le nom
       const nom = genererNomItineraire(clusterOptimise, i);
+      console.log(`🏷️ Nom généré pour cluster ${i}:`, nom);
 
       // Créer l'objet cluster
       const cluster = {
@@ -160,7 +162,10 @@ export async function genererClusters(beneficiaires, mosqueeId, options = {}) {
           adresse: b.adresse,
           telephone: b.telephone,
           nbPersonnes: b.nbPersonnes,
+          tailleFamille: b.tailleFamille,
           coords: b.coords,
+          packId: b.packId,
+          packSupplementId: b.packSupplementId,
           estAssigne: false, // ✅ Nouveau : non assigné par défaut
           itineraireId: null // ✅ Nouveau : pas encore dans un itinéraire
         })),

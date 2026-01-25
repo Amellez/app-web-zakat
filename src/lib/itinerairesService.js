@@ -221,13 +221,16 @@ export async function genererItinerairesAutomatiques(beneficiaires, mosqueeId, o
         codeUnique,
         statut: 'Non assigné',
         beneficiaires: clusterOptimise.map(b => ({
-          id: b.id,
-          nom: b.nom,
-          adresse: b.adresse,
-          telephone: b.telephone,
-          nbPersonnes: b.nbPersonnes,
-          coords: b.coords,
-          statutLivraison: 'En attente'
+        id: b.id,
+        nom: b.nom,
+        adresse: b.adresse,
+        telephone: b.telephone,
+        nbPersonnes: b.nbPersonnes,
+        tailleFamille: b.tailleFamille,
+        coords: b.coords,
+        packId: b.packId,
+        packSupplementId: b.packSupplementId,
+        statutLivraison: 'En attente'
         })),
         statistiques: stats, // Contient distanceDepuisMosquee et distanceTotale
         dateCreation: new Date().toISOString(),

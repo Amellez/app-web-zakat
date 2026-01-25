@@ -113,14 +113,17 @@ export default function ModalAssignerItineraire({
         telephone: telephone.trim() || null,
         statut: 'Non assigné',
         beneficiaires: benefsComplets.map(b => ({
-          id: b.id,
-          nom: b.nom,
-          adresse: b.adresse,
-          telephone: b.telephone,
-          nbPersonnes: b.nbPersonnes,
-          coords: b.coords,
-          statutLivraison: 'En attente'
-        })),
+        id: b.id,
+        nom: b.nom,
+        adresse: b.adresse,
+        telephone: b.telephone,
+        nbPersonnes: b.nbPersonnes,
+        tailleFamille: b.tailleFamille, // ← AJOUTEZ
+        coords: b.coords,
+        packId: b.packId, // ← AJOUTEZ
+        packSupplementId: b.packSupplementId, // ← AJOUTEZ
+        statutLivraison: 'En attente'
+      })),
         statistiques: stats,
         dateCreation: new Date().toISOString(),
         dateModification: new Date().toISOString()
