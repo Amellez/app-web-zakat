@@ -20,7 +20,7 @@ export default function ModalDetailPackBeneficiaire({ isOpen, onClose, beneficia
     setLoading(true);
     try {
       const packs = await getPacks(beneficiaire.mosqueeId);
-      
+
       if (beneficiaire.packId) {
         const pack = packs.find(p => p.id === beneficiaire.packId);
         if (pack) setPackStandard(pack);
@@ -52,9 +52,9 @@ export default function ModalDetailPackBeneficiaire({ isOpen, onClose, beneficia
   const totalArticles = (packStandard?.composition?.length || 0) + (packSupplement?.composition?.length || 0);
 
   return (
-    <Modal 
-      isOpen={isOpen} 
-      onClose={onClose} 
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
       title={`Pack Alimentaire - ${beneficiaire.nom}`}
       size="xl"
     >
@@ -120,7 +120,7 @@ export default function ModalDetailPackBeneficiaire({ isOpen, onClose, beneficia
                 <div className="p-6 bg-gray-50">
                   <div className="space-y-3">
                     {packStandard.composition?.map((item, idx) => (
-                      <div 
+                      <div
                         key={idx}
                         className="flex items-center justify-between p-4 bg-white rounded-lg border-2 border-gray-200"
                       >
@@ -162,7 +162,7 @@ export default function ModalDetailPackBeneficiaire({ isOpen, onClose, beneficia
                 <div className="p-6 bg-amber-50">
                   <div className="space-y-3">
                     {packSupplement.composition?.map((item, idx) => (
-                      <div 
+                      <div
                         key={idx}
                         className="flex items-center justify-between p-4 bg-white rounded-lg border-2 border-amber-200"
                       >

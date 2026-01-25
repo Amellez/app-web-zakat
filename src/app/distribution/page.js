@@ -1,7 +1,8 @@
 'use client';
-import React, { useState } from 'react';
-import { Search, Loader2, AlertCircle, MapPin, Users, Navigation, CheckCircle, XCircle, Package } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Loader2, AlertCircle, MapPin, Users, Navigation, CheckCircle, XCircle, Package, Gift } from 'lucide-react';
 import { getItineraireParCode, updateStatutLivraison } from '@/lib/itinerairesService';
+import { getPacks } from '@/lib/firebaseAdmin';
 
 export default function DistributionPage() {
   const [code, setCode] = useState('');
@@ -9,6 +10,52 @@ export default function DistributionPage() {
   const [error, setError] = useState('');
   const [itineraire, setItineraire] = useState(null);
   const [loadingLivraison, setLoadingLivraison] = useState({});
+  const [packs, setPacks] = useState([]);
+  const [loadingPacks, setLoadingPacks] = useState(false);
+
+  // Charger les packs quand un itinéraire est chargé
+  useEffect(() => {
+    if (itineraire && itineraire.mosqueeId) {
+      chargerPacks(itineraire.mosqueeId);
+    }
+  }, [itineraire?.mosqueeId]);
+
+  const chargerPacks = async (mosqueeId) => {
+  setLoadingPacks(true);
+  console.log('📦 Chargement packs pour mosquée:', mosqueeId);
+  try {
+    const packsData = await getPacks(mosqueeId);
+    console.log('📦 Packs chargés:', packsData.length, packsData);
+    setPacks(packsData);
+  } catch (err) {
+    console.error('❌ Erreur chargement packs:', err);
+  } finally {
+    setLoadingPacks(false);
+  }
+};
+
+  const getPackInfo = (beneficiaire) => {
+    if (!beneficiaire) return null;
+
+    console.log('🔍 Bénéficiaire:', beneficiaire.nom);
+    console.log('  - packId:', beneficiaire.packId);
+    console.log('  - packSupplementId:', beneficiaire.packSupplementId);
+    console.log('  - Nombre de packs disponibles:', packs.length);
+
+    const packStandard = packs.find(p => p.id === beneficiaire.packId);
+    const packSupplement = packs.find(p => p.id === beneficiaire.packSupplementId);
+
+    console.log('  - Pack trouvé:', packStandard?.tailleFamille || 'Aucun');
+    console.log('  - Supplément trouvé:', packSupplement?.articleFavori || 'Aucun');
+
+    return { packStandard, packSupplement };
+  };
+
+  const articleEmojis = {
+    'RIZ': '🍚',
+    'PÂTES': '🍝',
+    'COUSCOUS': '🥘'
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -183,6 +230,7 @@ export default function DistributionPage() {
                   onClick={() => {
                     setItineraire(null);
                     setCode('');
+                    setPacks([]);
                   }}
                   className="text-sm text-gray-600 hover:text-gray-800 underline"
                 >
@@ -236,7 +284,7 @@ export default function DistributionPage() {
               <div className="mt-4 pt-4 border-t grid grid-cols-2 gap-4 text-sm">
                 <div className="flex items-center gap-2 text-gray-600">
                   <Navigation className="w-4 h-4" />
-                  <span>{itineraire.statistiques?.distanceTotale || 0} km</span>
+                  <span>{itineraire.statistiques?.distanceTotale || 0} m</span>
                 </div>
                 <div className="flex items-center gap-2 text-gray-600">
                   <MapPin className="w-4 h-4" />
@@ -247,105 +295,131 @@ export default function DistributionPage() {
 
             {/* Liste des bénéficiaires */}
             <div className="space-y-4">
-              {itineraire.beneficiaires?.map((benef, index) => (
-                <div
-                  key={benef.id}
-                  className={`bg-white rounded-xl shadow-lg border-2 overflow-hidden transition ${
-                    benef.statutLivraison === 'Livré'
-                      ? 'border-green-300 opacity-75'
-                      : benef.statutLivraison === 'Échec'
-                      ? 'border-red-300'
-                      : 'border-gray-200'
-                  }`}
-                >
-                  <div className="p-6">
-                    {/* En-tête */}
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-start gap-3 flex-1">
-                        <div className="bg-emerald-600 text-white w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg flex-shrink-0">
-                          {index + 1}
+              {itineraire.beneficiaires?.map((benef, index) => {
+                const { packStandard, packSupplement } = getPackInfo(benef);
+
+                return (
+                  <div
+                    key={benef.id}
+                    className={`bg-white rounded-xl shadow-lg border-2 overflow-hidden transition ${
+                      benef.statutLivraison === 'Livré'
+                        ? 'border-green-300 opacity-75'
+                        : benef.statutLivraison === 'Échec'
+                        ? 'border-red-300'
+                        : 'border-gray-200'
+                    }`}
+                  >
+                    <div className="p-6">
+                      {/* En-tête */}
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex items-start gap-3 flex-1">
+                          <div className="bg-emerald-600 text-white w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg flex-shrink-0">
+                            {index + 1}
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="font-bold text-lg text-gray-800 mb-2">{benef.nom}</h3>
+
+                            {/* Badges Packs */}
+                            {!loadingPacks && (packStandard || packSupplement) && (
+                              <div className="flex flex-wrap gap-2 mb-2">
+                                {packStandard && (
+                                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg">
+                                    <Package className="w-4 h-4 text-blue-600" />
+                                    <span className="text-sm font-semibold text-blue-700">
+                                      Pack {packStandard.tailleFamille}
+                                    </span>
+                                  </div>
+                                )}
+                                {packSupplement && (
+                                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+                                    <Gift className="w-4 h-4 text-amber-600" />
+                                    <span className="text-sm font-semibold text-amber-700">
+                                      {articleEmojis[packSupplement.articleFavori] || '🎁'} {packSupplement.articleFavori}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex-1">
-                          <h3 className="font-bold text-lg text-gray-800">{benef.nom}</h3>
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold border-2 ${getStatutColor(benef.statutLivraison)}`}>
+                          {benef.statutLivraison}
+                        </span>
+                      </div>
+
+                      {/* Adresse */}
+                      <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                        <div className="flex items-start gap-2">
+                          <MapPin className="w-5 h-5 text-gray-600 flex-shrink-0 mt-0.5" />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-800">{benef.adresse}</p>
+                            {benef.telephone && (
+                              <a
+                                href={`tel:${benef.telephone}`}
+                                className="text-sm text-emerald-600 hover:text-emerald-700 mt-2 inline-block"
+                              >
+                                📞 {benef.telephone}
+                              </a>
+                            )}
+                          </div>
                         </div>
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold border-2 ${getStatutColor(benef.statutLivraison)}`}>
-                        {benef.statutLivraison}
-                      </span>
-                    </div>
 
-                    {/* Adresse */}
-                    <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                      <div className="flex items-start gap-2">
-                        <MapPin className="w-5 h-5 text-gray-600 flex-shrink-0 mt-0.5" />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-gray-800">{benef.adresse}</p>
-                          {benef.telephone && (
-                            <a
-                              href={`tel:${benef.telephone}`}
-                              className="text-sm text-emerald-600 hover:text-emerald-700 mt-2 inline-block"
-                            >
-                              📞 {benef.telephone}
-                            </a>
-                          )}
+                      {/* Actions */}
+                      {benef.statutLivraison === 'En attente' && (
+                        <div className="grid grid-cols-2 gap-3">
+                          <button
+                            onClick={() => handleStatutLivraison(benef.id, 'Livré')}
+                            disabled={loadingLivraison[benef.id]}
+                            className="flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold disabled:opacity-50"
+                          >
+                            {loadingLivraison[benef.id] ? (
+                              <Loader2 className="w-5 h-5 animate-spin" />
+                            ) : (
+                              <>
+                                <CheckCircle className="w-5 h-5" />
+                                Livré
+                              </>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => handleStatutLivraison(benef.id, 'Échec')}
+                            disabled={loadingLivraison[benef.id]}
+                            className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition font-semibold disabled:opacity-50"
+                          >
+                            {loadingLivraison[benef.id] ? (
+                              <Loader2 className="w-5 h-5 animate-spin" />
+                            ) : (
+                              <>
+                                <XCircle className="w-5 h-5" />
+                                Échec
+                              </>
+                            )}
+                          </button>
                         </div>
-                      </div>
-                    </div>
+                      )}
 
-                    {/* Actions */}
-                    {benef.statutLivraison === 'En attente' && (
-                      <div className="grid grid-cols-2 gap-3">
+                      {benef.statutLivraison === 'Livré' && (
+                        <div className="bg-green-50 rounded-lg p-3 text-center">
+                          <p className="text-sm font-semibold text-green-800">
+                            ✅ Distribution effectuée
+                          </p>
+                        </div>
+                      )}
+
+                      {benef.statutLivraison === 'Échec' && (
                         <button
-                          onClick={() => handleStatutLivraison(benef.id, 'Livré')}
+                          onClick={() => handleStatutLivraison(benef.id, 'En attente')}
                           disabled={loadingLivraison[benef.id]}
-                          className="flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold disabled:opacity-50"
+                          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition font-semibold disabled:opacity-50"
                         >
-                          {loadingLivraison[benef.id] ? (
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                          ) : (
-                            <>
-                              <CheckCircle className="w-5 h-5" />
-                              Livré
-                            </>
-                          )}
+                          Réessayer
                         </button>
-                        <button
-                          onClick={() => handleStatutLivraison(benef.id, 'Échec')}
-                          disabled={loadingLivraison[benef.id]}
-                          className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition font-semibold disabled:opacity-50"
-                        >
-                          {loadingLivraison[benef.id] ? (
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                          ) : (
-                            <>
-                              <XCircle className="w-5 h-5" />
-                              Échec
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    )}
-
-                    {benef.statutLivraison === 'Livré' && (
-                      <div className="bg-green-50 rounded-lg p-3 text-center">
-                        <p className="text-sm font-semibold text-green-800">
-                          ✅ Distribution effectuée
-                        </p>
-                      </div>
-                    )}
-
-                    {benef.statutLivraison === 'Échec' && (
-                      <button
-                        onClick={() => handleStatutLivraison(benef.id, 'En attente')}
-                        disabled={loadingLivraison[benef.id]}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition font-semibold disabled:opacity-50"
-                      >
-                        Réessayer
-                      </button>
-                    )}
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
