@@ -1,6 +1,6 @@
 'use client';
 import React, { useState } from 'react';
-import { Users, Navigation, Clock, Trash2, Copy, CheckCircle, QrCode, MapPin } from 'lucide-react';
+import { Users, Navigation, Clock, Trash2, Copy, CheckCircle, QrCode, MapPin, XCircle } from 'lucide-react';
 import { supprimerItineraire } from '@/lib/itinerairesService';
 import ModalConfirmation from '../ui/ModalConfirmation';
 
@@ -53,9 +53,12 @@ export default function ItineraireCard({ itineraire, onUpdate, mosqueeId }) {
 
   const getStatutColor = (statut) => {
     switch (statut) {
+      case 'Assigné': return 'bg-emerald-100 text-emerald-800 border-emerald-300';
+      case 'En distribution': return 'bg-blue-100 text-blue-800 border-blue-300';
+      case 'Terminé': return 'bg-green-100 text-green-800 border-green-300';
+      // Anciens statuts pour rétrocompatibilité
       case 'Non assigné': return 'bg-yellow-100 text-yellow-800 border-yellow-300';
       case 'En cours': return 'bg-blue-100 text-blue-800 border-blue-300';
-      case 'Terminé': return 'bg-green-100 text-green-800 border-green-300';
       default: return 'bg-gray-100 text-gray-800 border-gray-300';
     }
   };
@@ -65,6 +68,9 @@ export default function ItineraireCard({ itineraire, onUpdate, mosqueeId }) {
   // Calculer les livraisons effectuées
   const livraisonsEffectuees = itineraire.beneficiaires?.filter(b => b.statutLivraison === 'Livré').length || 0;
   const totalBeneficiaires = itineraire.beneficiaires?.length || 0;
+
+  // ✅ NOUVEAU : Calculer les échecs
+  const echecsCount = itineraire.beneficiaires?.filter(b => b.statutLivraison === 'Échec').length || 0;
 
   return (
     <div className="bg-white rounded-lg shadow-lg border-2 border-gray-200 overflow-hidden hover:shadow-xl transition">
@@ -121,18 +127,6 @@ export default function ItineraireCard({ itineraire, onUpdate, mosqueeId }) {
           </div>
 
           <div className="bg-gray-50 rounded-lg p-3 text-center">
-            <Clock className="w-5 h-5 text-gray-600 mx-auto mb-1" />
-            <p className="text-xs text-gray-600">Temps</p>
-            <p className="text-lg font-bold text-gray-800">{stats.tempsEstime || 0} min</p>
-          </div>
-
-          <div className="bg-emerald-50 rounded-lg p-3 text-center border-2 border-emerald-200">
-            <MapPin className="w-5 h-5 text-emerald-600 mx-auto mb-1" />
-            <p className="text-xs text-emerald-600 font-semibold">Depuis mosquée</p>
-            <p className="text-lg font-bold text-emerald-800">{formaterDistance(stats.distanceDepuisMosquee)}</p>
-          </div>
-
-          <div className="bg-gray-50 rounded-lg p-3 text-center">
             <Navigation className="w-5 h-5 text-gray-600 mx-auto mb-1" />
             <p className="text-xs text-gray-600">Distance parcours</p>
             <p className="text-lg font-bold text-gray-800">{formaterDistance(stats.distanceTotale)}</p>
@@ -157,6 +151,18 @@ export default function ItineraireCard({ itineraire, onUpdate, mosqueeId }) {
           </div>
         )}
 
+        {/* ✅ NOUVEAU : Afficher les échecs s'il y en a */}
+        {echecsCount > 0 && (
+          <div className="bg-red-50 border-2 border-red-200 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <XCircle className="w-5 h-5 text-red-600" />
+              <p className="text-xs font-semibold text-red-800">
+                {echecsCount} échec{echecsCount > 1 ? 's' : ''} de livraison
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Liste des bénéficiaires (aperçu) */}
         <div className="border-t pt-3">
           <p className="text-xs font-semibold text-gray-600 mb-2">Bénéficiaires:</p>
@@ -167,11 +173,35 @@ export default function ItineraireCard({ itineraire, onUpdate, mosqueeId }) {
                   {idx + 1}
                 </span>
                 <span className="truncate flex-1">{benef.nom}</span>
+
+                {/* ✅ NOUVEAU : Afficher le statut avec icône */}
                 {benef.statutLivraison === 'Livré' && (
                   <CheckCircle className="w-4 h-4 text-green-600" />
                 )}
+                {benef.statutLivraison === 'Échec' && (
+                  <div className="flex items-center gap-1">
+                    <XCircle className="w-4 h-4 text-red-600" />
+                    <span className="text-red-700 font-semibold">Échec</span>
+                  </div>
+                )}
               </div>
             ))}
+
+            {/* ✅ NOUVEAU : Afficher les raisons d'échec */}
+            {itineraire.beneficiaires?.some(b => b.statutLivraison === 'Échec' && b.raisonEchec) && (
+              <div className="mt-2 p-2 bg-red-50 rounded border border-red-200">
+                <p className="text-xs font-semibold text-red-700 mb-1">Notes d'échec :</p>
+                {itineraire.beneficiaires
+                  .filter(b => b.statutLivraison === 'Échec' && b.raisonEchec)
+                  .slice(0, 3) // Limiter à 3 pour ne pas surcharger
+                  .map(b => (
+                    <p key={b.id} className="text-xs text-red-600">
+                      • {b.nom}: {b.raisonEchec}
+                    </p>
+                  ))}
+              </div>
+            )}
+
             {itineraire.beneficiaires?.length > 5 && (
               <p className="text-xs text-gray-500 italic ml-7">
                 +{itineraire.beneficiaires.length - 5} autres...

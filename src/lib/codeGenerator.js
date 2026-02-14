@@ -1,52 +1,40 @@
 /**
- * Génère un code unique pour un itinéraire
- * Format: ITI-XXXYYY où XXX = 3 lettres, YYY = 3 chiffres
- * Exemple: ITI-ABC123
+ * Génère un code numérique simple pour un itinéraire
+ * Format: 001, 002, 003, etc.
+ * @param {Array} codesExistants - Liste des codes déjà utilisés
  */
-export function genererCodeUnique() {
-  const lettres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const chiffres = '0123456789';
+export function genererCodeUniqueNonUtilise(codesExistants = []) {
+  // Trouver le prochain numéro disponible
+  let numero = 1;
 
-  let code = 'ITI-';
+  // Convertir tous les codes existants en nombres pour trouver le max
+  const numerosExistants = codesExistants
+    .map(code => parseInt(code, 10))
+    .filter(n => !isNaN(n));
 
-  // 3 lettres aléatoires
-  for (let i = 0; i < 3; i++) {
-    code += lettres.charAt(Math.floor(Math.random() * lettres.length));
+  if (numerosExistants.length > 0) {
+    // Prendre le max + 1
+    numero = Math.max(...numerosExistants) + 1;
   }
 
-  // 3 chiffres aléatoires
-  for (let i = 0; i < 3; i++) {
-    code += chiffres.charAt(Math.floor(Math.random() * chiffres.length));
-  }
+  // Formatter sur 3 chiffres avec des zéros devant
+  const code = numero.toString().padStart(3, '0');
 
   return code;
 }
 
 /**
- * Vérifie si un code est valide (format)
+ * Vérifie si un code est valide (format numérique)
  */
 export function validerFormatCode(code) {
-  const regex = /^ITI-[A-Z]{3}[0-9]{3}$/;
+  const regex = /^[0-9]{3}$/;
   return regex.test(code);
 }
 
 /**
- * Génère un code unique non utilisé
- * @param {Array} codesExistants - Liste des codes déjà utilisés
+ * @deprecated Fonction gardée pour rétrocompatibilité
+ * Utiliser genererCodeUniqueNonUtilise directement
  */
-export function genererCodeUniqueNonUtilise(codesExistants = []) {
-  let code;
-  let tentatives = 0;
-  const maxTentatives = 100;
-
-  do {
-    code = genererCodeUnique();
-    tentatives++;
-
-    if (tentatives >= maxTentatives) {
-      throw new Error('Impossible de générer un code unique après 100 tentatives');
-    }
-  } while (codesExistants.includes(code));
-
-  return code;
+export function genererCodeUnique() {
+  return genererCodeUniqueNonUtilise();
 }

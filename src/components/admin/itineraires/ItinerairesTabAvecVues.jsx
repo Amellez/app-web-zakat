@@ -20,7 +20,7 @@ export default function ItinerairesTabAvecVues({ beneficiaires }) {
           }`}
         >
           <Layers className="w-5 h-5" />
-          <span>Clusters</span>
+          <span>Secteurs</span>
         </button>
         <button
           onClick={() => setView('itineraires')}
@@ -40,10 +40,10 @@ export default function ItinerairesTabAvecVues({ beneficiaires }) {
         {view === 'clusters' ? (
           <div>
             <p className="text-sm font-semibold text-blue-800 mb-1">
-              📦 Vue Clusters
+              📦 Vue Secteurs
             </p>
             <p className="text-sm text-blue-700">
-              Créez des groupes géographiques et sélectionnez les bénéficiaires à assigner à un bénévole.
+              Créez des secteurs géographiques et sélectionnez les bénéficiaires à assigner à un bénévole.
             </p>
           </div>
         ) : (

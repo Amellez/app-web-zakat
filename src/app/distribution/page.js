@@ -13,6 +13,10 @@ export default function DistributionPage() {
   const [packs, setPacks] = useState([]);
   const [loadingPacks, setLoadingPacks] = useState(false);
 
+  // ✅ NOUVEAU : États pour le modal d'échec
+  const [beneficiaireEchec, setBeneficiaireEchec] = useState(null);
+  const [raisonEchec, setRaisonEchec] = useState('');
+
   // Charger les packs quand un itinéraire est chargé
   useEffect(() => {
     if (itineraire && itineraire.mosqueeId) {
@@ -21,18 +25,18 @@ export default function DistributionPage() {
   }, [itineraire?.mosqueeId]);
 
   const chargerPacks = async (mosqueeId) => {
-  setLoadingPacks(true);
-  console.log('📦 Chargement packs pour mosquée:', mosqueeId);
-  try {
-    const packsData = await getPacks(mosqueeId);
-    console.log('📦 Packs chargés:', packsData.length, packsData);
-    setPacks(packsData);
-  } catch (err) {
-    console.error('❌ Erreur chargement packs:', err);
-  } finally {
-    setLoadingPacks(false);
-  }
-};
+    setLoadingPacks(true);
+    console.log('📦 Chargement packs pour mosquée:', mosqueeId);
+    try {
+      const packsData = await getPacks(mosqueeId);
+      console.log('📦 Packs chargés:', packsData.length, packsData);
+      setPacks(packsData);
+    } catch (err) {
+      console.error('❌ Erreur chargement packs:', err);
+    } finally {
+      setLoadingPacks(false);
+    }
+  };
 
   const getPackInfo = (beneficiaire) => {
     if (!beneficiaire) return null;
@@ -115,6 +119,54 @@ export default function DistributionPage() {
     }
   };
 
+  // ✅ NOUVEAU : Ouvrir le modal pour saisir la raison d'échec
+  const handleOuvrirModalEchec = (beneficiaire) => {
+    setBeneficiaireEchec(beneficiaire);
+    setRaisonEchec('');
+  };
+
+  // ✅ NOUVEAU : Confirmer l'échec avec raison
+  const handleConfirmerEchec = async () => {
+    if (!beneficiaireEchec || !raisonEchec.trim()) {
+      alert('Veuillez indiquer une raison');
+      return;
+    }
+
+    setLoadingLivraison(prev => ({ ...prev, [beneficiaireEchec.id]: true }));
+
+    try {
+      await updateStatutLivraison(
+        itineraire.id,
+        beneficiaireEchec.id,
+        'Échec',
+        raisonEchec.trim() // ✅ NOUVEAU : Passer la raison
+      );
+
+      // Mettre à jour l'état local
+      setItineraire(prev => ({
+        ...prev,
+        beneficiaires: prev.beneficiaires.map(b =>
+          b.id === beneficiaireEchec.id
+            ? {
+                ...b,
+                statutLivraison: 'Échec',
+                raisonEchec: raisonEchec.trim() // ✅ NOUVEAU
+              }
+            : b
+        )
+      }));
+
+      setBeneficiaireEchec(null);
+      setRaisonEchec('');
+
+    } catch (err) {
+      console.error('Erreur mise à jour:', err);
+      alert('Erreur lors de la mise à jour du statut');
+    } finally {
+      setLoadingLivraison(prev => ({ ...prev, [beneficiaireEchec.id]: false }));
+    }
+  };
+
   const getStatutColor = (statut) => {
     switch (statut) {
       case 'Livré': return 'bg-green-100 text-green-800 border-green-300';
@@ -130,6 +182,17 @@ export default function DistributionPage() {
     echecs: itineraire.beneficiaires?.filter(b => b.statutLivraison === 'Échec').length || 0,
     enAttente: itineraire.beneficiaires?.filter(b => b.statutLivraison === 'En attente').length || 0
   } : null;
+
+  // Fonction pour formater la distance
+  const formaterDistance = (distanceEnMetres) => {
+    if (!distanceEnMetres || distanceEnMetres === 0) return '0 m';
+
+    if (distanceEnMetres < 1000) {
+      return `${Math.round(distanceEnMetres)} m`;
+    } else {
+      return `${(distanceEnMetres / 1000).toFixed(1)} km`;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50">
@@ -284,12 +347,9 @@ export default function DistributionPage() {
               <div className="mt-4 pt-4 border-t grid grid-cols-2 gap-4 text-sm">
                 <div className="flex items-center gap-2 text-gray-600">
                   <Navigation className="w-4 h-4" />
-                  <span>{itineraire.statistiques?.distanceTotale || 0} m</span>
+                  <span>{formaterDistance(itineraire.statistiques?.distanceTotale)}</span>
                 </div>
-                <div className="flex items-center gap-2 text-gray-600">
-                  <MapPin className="w-4 h-4" />
-                  <span>{itineraire.statistiques?.tempsEstime || 0} min estimées</span>
-                </div>
+
               </div>
             </div>
 
@@ -383,7 +443,7 @@ export default function DistributionPage() {
                             )}
                           </button>
                           <button
-                            onClick={() => handleStatutLivraison(benef.id, 'Échec')}
+                            onClick={() => handleOuvrirModalEchec(benef)}
                             disabled={loadingLivraison[benef.id]}
                             className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition font-semibold disabled:opacity-50"
                           >
@@ -408,13 +468,23 @@ export default function DistributionPage() {
                       )}
 
                       {benef.statutLivraison === 'Échec' && (
-                        <button
-                          onClick={() => handleStatutLivraison(benef.id, 'En attente')}
-                          disabled={loadingLivraison[benef.id]}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition font-semibold disabled:opacity-50"
-                        >
-                          Réessayer
-                        </button>
+                        <div className="space-y-2">
+                          {/* ✅ NOUVEAU : Afficher la raison d'échec */}
+                          {benef.raisonEchec && (
+                            <div className="bg-red-50 border-2 border-red-200 rounded-lg p-3">
+                              <p className="text-xs font-semibold text-red-700 mb-1">Raison de l'échec :</p>
+                              <p className="text-sm text-red-800">{benef.raisonEchec}</p>
+                            </div>
+                          )}
+
+                          <button
+                            onClick={() => handleStatutLivraison(benef.id, 'En attente')}
+                            disabled={loadingLivraison[benef.id]}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition font-semibold disabled:opacity-50"
+                          >
+                            Réessayer
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -424,6 +494,53 @@ export default function DistributionPage() {
           </div>
         )}
       </div>
+
+      {/* ✅ NOUVEAU : Modal raison d'échec */}
+      {beneficiaireEchec && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">
+              Raison de l'échec
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Bénéficiaire : <strong>{beneficiaireEchec.nom}</strong>
+            </p>
+
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Pourquoi la livraison a-t-elle échoué ?
+              </label>
+              <textarea
+                value={raisonEchec}
+                onChange={(e) => setRaisonEchec(e.target.value)}
+                placeholder="Ex: Absent, Adresse introuvable, Refus..."
+                rows={4}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-red-500 focus:outline-none resize-none"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setBeneficiaireEchec(null);
+                  setRaisonEchec('');
+                }}
+                className="flex-1 px-4 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-semibold"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleConfirmerEchec}
+                disabled={!raisonEchec.trim()}
+                className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Confirmer l'échec
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

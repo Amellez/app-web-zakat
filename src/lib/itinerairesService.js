@@ -230,7 +230,8 @@ export async function genererItinerairesAutomatiques(beneficiaires, mosqueeId, o
         coords: b.coords,
         packId: b.packId,
         packSupplementId: b.packSupplementId,
-        statutLivraison: 'En attente'
+        statutLivraison: 'En attente',
+        raisonEchec: null // ✅ NOUVEAU
         })),
         statistiques: stats, // Contient distanceDepuisMosquee et distanceTotale
         dateCreation: new Date().toISOString(),
@@ -363,9 +364,9 @@ export async function getItineraireParCode(codeUnique) {
 }
 
 /**
- * Met à jour le statut de livraison d'un bénéficiaire
+ * ✅ MODIFIÉ : Met à jour le statut de livraison d'un bénéficiaire avec raison d'échec optionnelle
  */
-export async function updateStatutLivraison(itineraireId, beneficiaireId, nouveauStatut) {
+export async function updateStatutLivraison(itineraireId, beneficiaireId, nouveauStatut, raisonEchec = null) {
   try {
     const docRef = doc(db, 'itineraires', itineraireId);
     const docSnap = await getDoc(docRef);
@@ -382,7 +383,8 @@ export async function updateStatutLivraison(itineraireId, beneficiaireId, nouvea
         return {
           ...b,
           statutLivraison: nouveauStatut,
-          dateLivraison: nouveauStatut === 'Livré' ? new Date().toISOString() : null
+          dateLivraison: nouveauStatut === 'Livré' ? new Date().toISOString() : null,
+          raisonEchec: nouveauStatut === 'Échec' ? raisonEchec : null // ✅ NOUVEAU
         };
       }
       return b;
@@ -444,6 +446,40 @@ export async function supprimerItineraire(itineraireId, beneficiairesIds, mosque
       });
     }
 
+    // ✅ NOUVEAU : Mettre à jour les secteurs
+    const { getClusters, updateDoc: updateClusterDoc } = await import('./clustersService');
+    const clusters = await getClusters(mosqueeId);
+
+    for (const cluster of clusters) {
+      let needsUpdate = false;
+      const beneficiairesUpdates = cluster.beneficiaires.map(b => {
+        if (beneficiairesIds.includes(b.id) && b.itineraireId === itineraireId) {
+          needsUpdate = true;
+          return {
+            ...b,
+            estAssigne: false,
+            itineraireId: null,
+            dateAssignation: null
+          };
+        }
+        return b;
+      });
+
+      if (needsUpdate) {
+        const clusterDocRef = doc(db, 'clusters', cluster.id);
+        await updateDoc(clusterDocRef, {
+          beneficiaires: beneficiairesUpdates,
+          dateModification: new Date().toISOString()
+        });
+
+        // Mettre à jour le statut du cluster
+        const { updateStatutCluster } = await import('./clustersService');
+        await updateStatutCluster(cluster.id);
+
+        console.log(`✅ Secteur ${cluster.id} mis à jour après suppression itinéraire`);
+      }
+    }
+
     // Supprimer l'itinéraire
     await deleteDoc(doc(db, 'itineraires', itineraireId));
 
@@ -483,6 +519,40 @@ export async function supprimerTousLesItineraires(mosqueeId) {
         });
       } catch (error) {
         console.error(`Erreur réinitialisation bénéficiaire ${benefId}:`, error);
+      }
+    }
+
+    // ✅ NOUVEAU : Mettre à jour tous les secteurs
+    const { getClusters } = await import('./clustersService');
+    const clusters = await getClusters(mosqueeId);
+
+    for (const cluster of clusters) {
+      let needsUpdate = false;
+      const beneficiairesUpdates = cluster.beneficiaires.map(b => {
+        if (allBeneficiairesIds.includes(b.id) && b.estAssigne) {
+          needsUpdate = true;
+          return {
+            ...b,
+            estAssigne: false,
+            itineraireId: null,
+            dateAssignation: null
+          };
+        }
+        return b;
+      });
+
+      if (needsUpdate) {
+        const clusterDocRef = doc(db, 'clusters', cluster.id);
+        await updateDoc(clusterDocRef, {
+          beneficiaires: beneficiairesUpdates,
+          dateModification: new Date().toISOString()
+        });
+
+        // Mettre à jour le statut du cluster
+        const { updateStatutCluster } = await import('./clustersService');
+        await updateStatutCluster(cluster.id);
+
+        console.log(`✅ Secteur ${cluster.id} mis à jour après suppression itinéraires`);
       }
     }
 

@@ -37,7 +37,7 @@ export default function ClustersTab({ beneficiaires }) {
       const data = await getClusters(mosqueeActive);
       setClusters(data);
     } catch (error) {
-      console.error('Erreur chargement clusters:', error);
+      console.error('Erreur chargement secteurs:', error);
     } finally {
       setLoading(false);
     }
@@ -55,10 +55,10 @@ export default function ClustersTab({ beneficiaires }) {
       // Vider le state
       setClusters([]);
 
-      alert('✅ Tous les clusters ont été supprimés');
+      alert('✅ Tous les secteurs ont été supprimés');
     } catch (error) {
       console.error('Erreur suppression:', error);
-      alert('Erreur lors de la suppression des clusters');
+      alert('Erreur lors de la suppression des secteurs');
       // En cas d'erreur, recharger
       chargerClusters();
     } finally {
@@ -139,7 +139,7 @@ const handleOpenCluster = (cluster) => {
             Aucune mosquée sélectionnée
           </h3>
           <p className="text-sm text-red-700 text-center">
-            Veuillez sélectionner une mosquée pour accéder aux clusters.
+            Veuillez sélectionner une mosquée pour accéder aux secteurs.
           </p>
         </div>
       </div>
@@ -151,9 +151,9 @@ const handleOpenCluster = (cluster) => {
       {/* En-tête */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">Gestion des Clusters</h2>
+          <h2 className="text-2xl font-bold text-gray-800">Gestion des Secteurs</h2>
           <p className="text-sm text-gray-600 mt-1">
-            {stats.totalClusters} cluster{stats.totalClusters > 1 ? 's' : ''} • {stats.totalBeneficiaires} bénéficiaire{stats.totalBeneficiaires > 1 ? 's' : ''}
+            {stats.totalClusters} secteur{stats.totalClusters > 1 ? 's' : ''} • {stats.totalBeneficiaires} bénéficiaire{stats.totalBeneficiaires > 1 ? 's' : ''}
           </p>
         </div>
 
@@ -175,7 +175,7 @@ const handleOpenCluster = (cluster) => {
             className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-semibold disabled:opacity-50"
           >
             <Layers className="w-5 h-5" />
-            Créer des clusters
+            Générer les secteurs
           </button>
         </div>
       </div>
@@ -184,7 +184,7 @@ const handleOpenCluster = (cluster) => {
       {clusters.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-white rounded-lg shadow p-4 border-l-4 border-emerald-500">
-            <p className="text-sm text-gray-600">Total clusters</p>
+            <p className="text-sm text-gray-600">Total secteurs</p>
             <p className="text-2xl font-bold text-gray-800">{stats.totalClusters}</p>
           </div>
           <div className="bg-white rounded-lg shadow p-4 border-l-4 border-gray-500">
@@ -230,7 +230,7 @@ const handleOpenCluster = (cluster) => {
         </div>
       )}
 
-      {/* Liste des clusters */}
+      {/* Liste des secteurs */}
       {loading && clusters.length === 0 ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
@@ -238,9 +238,9 @@ const handleOpenCluster = (cluster) => {
       ) : clusters.length === 0 ? (
         <EmptyState
           icon={MapPin}
-          title="Aucun cluster créé"
-          description="Créez vos premiers clusters pour commencer à organiser la distribution"
-          buttonText="Créer des clusters"
+          title="Aucun secteur créé"
+          description="Créez vos premiers secteurs pour commencer à organiser la distribution"
+          buttonText="Générer les secteurs"
           onButtonClick={() => setShowModal(true)}
         />
       ) : (
@@ -265,7 +265,7 @@ const handleOpenCluster = (cluster) => {
         onSuccess={handleSuccessCreation}
       />
 
-      {/* Modal détail cluster */}
+      {/* Modal détail secteur */}
       <ModalDetailCluster
         isOpen={showModalDetail}
         onClose={() => setShowModalDetail(false)}
@@ -291,8 +291,8 @@ const handleOpenCluster = (cluster) => {
         isOpen={showConfirmSupprimer}
         onClose={() => setShowConfirmSupprimer(false)}
         onConfirm={handleConfirmSupprimer}
-        title="Supprimer tous les clusters"
-        message="⚠️ Êtes-vous sûr de vouloir supprimer TOUS les clusters ? Cette action est irréversible et supprimera tous les groupes de bénéficiaires."
+        title="Supprimer tous les secteurs"
+        message="⚠️ Êtes-vous sûr de vouloir supprimer TOUS les secteurs ? Cette action est irréversible et supprimera tous les groupes de bénéficiaires."
         confirmText="Supprimer tout"
         cancelText="Annuler"
         variant="danger"
