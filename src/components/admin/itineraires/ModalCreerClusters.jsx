@@ -7,7 +7,7 @@ import { genererClusters } from '@/lib/clustersService';
 
 export default function ModalCreerClusters({ isOpen, onClose, beneficiaires, mosqueeId, onSuccess }) {
   const [step, setStep] = useState(1); // 1: Config, 2: Géolocalisation, 3: Génération
-  const [rayonKm, setRayonKm] = useState(1);
+  const [rayonMetres, setRayonMetres] = useState(1000); // En mètres maintenant
   const [forceRegeneration, setForceRegeneration] = useState(false);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0, percentage: 0 });
@@ -32,6 +32,15 @@ export default function ModalCreerClusters({ isOpen, onClose, beneficiaires, mos
       setProgress({ current: 0, total: 0, percentage: 0 });
       setBeneficiairesLocaux([]);
       onClose();
+    }
+  };
+
+  // Formater l'affichage du rayon (mètres < 1000, km >= 1000)
+  const formatRayon = (metres) => {
+    if (metres < 1000) {
+      return `${metres} m`;
+    } else {
+      return `${(metres / 1000).toFixed(1)} km`;
     }
   };
 
@@ -76,10 +85,13 @@ export default function ModalCreerClusters({ isOpen, onClose, beneficiaires, mos
 
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Étape 2: Génération des clusters
-      console.log('🚀 Étape 2: Génération des clusters...');
+      // Étape 2: Génération des secteurs
+      console.log('🚀 Étape 2: Génération des secteurs...');
       setStep(3);
       setProgress({ current: 0, total: 0, percentage: 0 });
+
+      // Convertir les mètres en km pour l'API
+      const rayonKm = rayonMetres / 1000;
 
       const clusterResult = await genererClusters(
         benefsAvecCoords,
@@ -88,10 +100,10 @@ export default function ModalCreerClusters({ isOpen, onClose, beneficiaires, mos
       );
 
       if (!clusterResult.success) {
-        throw new Error('Erreur lors de la génération des clusters');
+        throw new Error('Erreur lors de la génération des secteurs');
       }
 
-      console.log('✅ Clusters générés avec succès');
+      console.log('✅ Secteurs générés avec succès');
 
       setResult({
         nombreClusters: clusterResult.nombreClusters,
@@ -133,7 +145,7 @@ export default function ModalCreerClusters({ isOpen, onClose, beneficiaires, mos
           <div>
             <p className="text-sm font-semibold text-red-800">mosqueeId manquant</p>
             <p className="text-sm text-red-700 mt-1">
-              Impossible de créer des clusters sans mosqueeId.
+              Impossible de créer des secteurs sans mosqueeId.
             </p>
           </div>
         </div>
@@ -142,7 +154,7 @@ export default function ModalCreerClusters({ isOpen, onClose, beneficiaires, mos
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="Créer des Clusters Géographiques">
+    <Modal isOpen={isOpen} onClose={handleClose} title="Créer des Secteurs Géographiques">
       <div className="space-y-6">
         {step === 1 && (
           <>
@@ -152,7 +164,7 @@ export default function ModalCreerClusters({ isOpen, onClose, beneficiaires, mos
                 <MapPin className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-sm font-semibold text-blue-800 mb-2">
-                    Création automatique de clusters
+                    Création automatique de secteurs
                   </p>
                   <ul className="text-sm text-blue-700 space-y-1">
                     <li>• Géolocalisation automatique des adresses</li>
@@ -181,8 +193,7 @@ export default function ModalCreerClusters({ isOpen, onClose, beneficiaires, mos
                 <span className="text-lg font-bold text-gray-800">{benefsEligibles.length}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">À géolocaliser:</span>
-                <span className="text-lg font-bold text-orange-600">{benefsSansCoords.length}</span>
+
               </div>
             </div>
 
@@ -217,23 +228,32 @@ export default function ModalCreerClusters({ isOpen, onClose, beneficiaires, mos
               </div>
             )}
 
-            {/* Configuration */}
+            {/* Configuration du rayon */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Rayon de regroupement (km)
+                Rayon de regroupement
               </label>
-              <input
-                type="number"
-                value={rayonKm}
-                onChange={(e) => setRayonKm(parseFloat(e.target.value))}
-                min="1"
-                max="10"
-                step="0.5"
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 focus:outline-none"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Les bénéficiaires dans ce rayon seront regroupés dans le même cluster
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  value={rayonMetres}
+                  onChange={(e) => setRayonMetres(parseInt(e.target.value))}
+                  min="100"
+                  max="5000"
+                  step="100"
+                  className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-emerald-600"
+                />
+                <div className="bg-emerald-100 text-emerald-800 px-4 py-2 rounded-lg font-bold text-lg min-w-[100px] text-center">
+                  {formatRayon(rayonMetres)}
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Les bénéficiaires dans ce rayon seront regroupés dans le même secteur
               </p>
+              <div className="flex justify-between text-xs text-gray-400 mt-1">
+                <span>100 m</span>
+                <span>5 km</span>
+              </div>
             </div>
 
             {/* Option de régénération */}
@@ -247,10 +267,10 @@ export default function ModalCreerClusters({ isOpen, onClose, beneficiaires, mos
                 />
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-amber-800">
-                    Supprimer les clusters existants avant de créer de nouveaux
+                    Supprimer les secteurs existants avant de créer de nouveaux
                   </p>
                   <p className="text-xs text-amber-700 mt-1">
-                    ⚠️ Cette action supprimera tous vos clusters actuels. Laissez décoché si vous voulez conserver les clusters existants.
+                    ⚠️ Cette action supprimera tous vos secteurs actuels. Laissez décoché si vous voulez conserver les secteurs existants.
                   </p>
                 </div>
               </label>
@@ -269,7 +289,7 @@ export default function ModalCreerClusters({ isOpen, onClose, beneficiaires, mos
                 disabled={benefsEligibles.length === 0}
                 className="flex-1 px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Générer les clusters
+                Générer les secteurs
               </button>
             </div>
           </>
@@ -313,7 +333,7 @@ export default function ModalCreerClusters({ isOpen, onClose, beneficiaires, mos
             <div className="text-center">
               <Loader2 className="w-12 h-12 animate-spin text-emerald-600 mx-auto mb-4" />
               <h3 className="text-lg font-bold text-gray-800 mb-2">
-                Génération des clusters...
+                Génération des secteurs...
               </h3>
               <p className="text-sm text-gray-600">
                 Création des groupes géographiques et optimisation
@@ -327,13 +347,13 @@ export default function ModalCreerClusters({ isOpen, onClose, beneficiaires, mos
             <div className="text-center mb-6">
               <CheckCircle className="w-16 h-16 text-green-600 mx-auto mb-4" />
               <h3 className="text-xl font-bold text-gray-800 mb-2">
-                Clusters créés avec succès !
+                Secteurs créés avec succès !
               </h3>
             </div>
 
             <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4 space-y-2">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-700">Clusters créés:</span>
+                <span className="text-sm text-gray-700">Secteurs créés:</span>
                 <span className="text-lg font-bold text-green-700">{result.nombreClusters}</span>
               </div>
               <div className="flex justify-between items-center">
@@ -350,7 +370,7 @@ export default function ModalCreerClusters({ isOpen, onClose, beneficiaires, mos
 
             <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
               <p className="text-sm text-blue-800">
-                ℹ️ <strong>Prochaine étape :</strong> Vous pouvez maintenant sélectionner les bénéficiaires à assigner dans chaque cluster.
+                ℹ️ <strong>Prochaine étape :</strong> Vous pouvez maintenant sélectionner les bénéficiaires à assigner dans chaque secteur.
               </p>
             </div>
 

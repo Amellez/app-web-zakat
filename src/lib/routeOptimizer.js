@@ -181,7 +181,7 @@ function trouverPlusProche(coords, points) {
 }
 
 /**
- * Calcule les statistiques d'un itinéraire
+ * Calcule les statistiques d'un itinéraire avec parcours
  * ✅ MODIFIÉ : Ajoute la distance depuis la mosquée et gère les itinéraires individuels
  * @param {Array} cluster - Liste optimisée de bénéficiaires
  * @param {Object} coordsMosquee - Coordonnées de la mosquée (optionnel)
@@ -192,17 +192,26 @@ export function calculerStatistiquesItineraire(cluster, coordsMosquee = null) {
       nombreBeneficiaires: 0,
       distanceTotale: 0,
       distanceDepuisMosquee: 0,
-      tempsEstime: 0
+      tempsEstime: 0,
+      parcours: []
     };
   }
 
   let distanceTotale = 0;
   let distanceDepuisMosquee = 0;
+  const parcours = [];
 
   // ✅ Calculer la distance mosquée → premier bénéficiaire
   if (coordsMosquee && coordsMosquee.lat && coordsMosquee.lng && cluster[0] && cluster[0].coords) {
     try {
       distanceDepuisMosquee = calculerDistance(coordsMosquee, cluster[0].coords);
+
+       parcours.push({
+        de: '🕌 Mosquée',
+        vers: cluster[0].nom,
+        distance: distanceDepuisMosquee
+      });
+
     } catch (error) {
       console.warn('⚠️ Erreur calcul distance depuis mosquée:', error);
       distanceDepuisMosquee = 0;
@@ -222,14 +231,21 @@ export function calculerStatistiquesItineraire(cluster, coordsMosquee = null) {
           cluster[i + 1].coords
         );
         distanceTotale += distance;
+
+        parcours.push({
+          de: cluster[i].nom,
+          vers: cluster[i + 1].nom,
+          distance: distance
+        });
       } catch (error) {
         console.warn(`⚠️ Erreur calcul distance entre bénéficiaires ${i} et ${i+1}:`, error);
       }
     }
+    distanceTotale += distanceDepuisMosquee;
   }
 
-  // Estimation du temps (10 min par livraison + temps de trajet)
-  const tempsLivraison = cluster.length * 10; // 10 min par bénéficiaire
+  // Estimation du temps (5 min par livraison + temps de trajet)
+  const tempsLivraison = cluster.length * 5; // 5 min par bénéficiaire
   const tempsTrajet = (distanceTotale + distanceDepuisMosquee) * 3; // 3 min par km (vitesse moyenne en ville)
   const tempsEstime = Math.round(tempsLivraison + tempsTrajet);
 
@@ -237,7 +253,8 @@ export function calculerStatistiquesItineraire(cluster, coordsMosquee = null) {
     nombreBeneficiaires: cluster.length,
     distanceTotale: Math.round(distanceTotale * 1000), // Convertir km en mètres
     distanceDepuisMosquee: Math.round(distanceDepuisMosquee * 1000), // Convertir km en mètres
-    tempsEstime // en minutes
+    tempsEstime, // en minutes
+    parcours
   };
 }
 
