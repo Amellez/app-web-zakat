@@ -17,7 +17,6 @@ export default function ItinerairesTab({ beneficiaires }) {
   const [itineraires, setItineraires] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [viewMode, setViewMode] = useState('list'); // 'list' ou 'map'
   const [showConfirmSupprimer, setShowConfirmSupprimer] = useState(false);
 
   // ✅ NOUVEAU : Filtre pour afficher uniquement les itinéraires avec échecs
@@ -195,32 +194,8 @@ export default function ItinerairesTab({ beneficiaires }) {
               )}
             </button>
           )}
-
-          {/* Toggle Vue Liste / Carte */}
-          <div className="flex gap-2 bg-white rounded-lg shadow p-1">
-            <button
-              onClick={() => setViewMode('list')}
-              className={`px-4 py-2 rounded-lg transition font-medium ${
-                viewMode === 'list'
-                  ? 'bg-emerald-600 text-white'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              📋 Liste
-            </button>
-            <button
-              onClick={() => setViewMode('map')}
-              className={`px-4 py-2 rounded-lg transition font-medium ${
-                viewMode === 'map'
-                  ? 'bg-emerald-600 text-white'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              🗺️ Carte
-            </button>
           </div>
-        </div>
-      )}
+        )}
 
       {/* ✅ NOUVEAU : Message si filtre échecs actif mais aucun résultat */}
       {filtreEchecs && itinerairesFiltres.length === 0 && (
@@ -244,7 +219,7 @@ export default function ItinerairesTab({ beneficiaires }) {
           title="Aucun itinéraire créé"
           onButtonClick={() => setShowModal(true)}
         />
-      ) : viewMode === 'list' && itinerairesFiltres.length > 0 ? (
+      ) : itinerairesFiltres.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {itinerairesFiltres.map(itineraire => (
             <ItineraireCard
@@ -254,11 +229,6 @@ export default function ItinerairesTab({ beneficiaires }) {
               mosqueeId={mosqueeActive}
             />
           ))}
-        </div>
-      ) : viewMode === 'map' ? (
-        <div className="bg-gray-100 rounded-lg p-8 text-center">
-          <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-          <p className="text-gray-600">Vue carte bientôt disponible</p>
         </div>
       ) : null}
 

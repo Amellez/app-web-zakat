@@ -12,7 +12,6 @@ export default function ModalAssignerItineraire({
   mosqueeId,
   onSuccess
 }) {
-  //const [nom, setNom] = useState('');
   const [benevole, setBenevole] = useState('');
   const [telephone, setTelephone] = useState('');
   const [loading, setLoading] = useState(false);
@@ -66,17 +65,6 @@ export default function ModalAssignerItineraire({
   // Réinitialiser le formulaire à l'ouverture
   useEffect(() => {
     if (isOpen) {
-      // Générer un nom par défaut basé sur le premier cluster
-      /*const premierCluster = clusters.find(c =>
-        c.beneficiaires.some(b => beneficiairesSelectionnes.includes(b.id))
-      );
-
-      if (premierCluster) {
-        setNom(`${premierCluster.nom.split('(')[0].trim()} - Itinéraire`);
-      } else {
-        setNom('Nouvel itinéraire');
-      }*/
-
       setBenevole('');
       setTelephone('');
       setError(null);
@@ -153,7 +141,6 @@ export default function ModalAssignerItineraire({
 
       // Récupérer les coordonnées de la mosquée
       const { getDoc, doc } = await import('firebase/firestore');
-      //const { db } = await import('@/lib/firebase');
 
       let coordsMosqueeLocales = coordsMosquee; // Essayer d'abord le state
 
@@ -184,7 +171,6 @@ export default function ModalAssignerItineraire({
 
       // Créer l'itinéraire
       const itineraire = {
-        //nom: nom.trim() || 'Itinéraire sans nom',
         nom: benevole.trim()
         ? `Itinéraire - ${benevole.trim()}`
         : `Itinéraire ${codeUnique}`,
@@ -284,7 +270,8 @@ export default function ModalAssignerItineraire({
     nombreBeneficiaires: benefsComplets.length,
     distanceDepuisMosquee: 0,
     distanceTotale: 0,
-    tempsEstime: 0
+    tempsEstime: 0,
+    parcours: []
   };
 
   if (benefsComplets.length > 0) {
@@ -313,7 +300,7 @@ export default function ModalAssignerItineraire({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title={showSuccess ? "Itinéraire créé !" : "Créer un itinéraire"} size={showSuccess ? "large" : "default"}>
+    <Modal isOpen={isOpen} onClose={handleClose} title={showSuccess ? "Itinéraire créé !" : "Créer un itinéraire"} size="md">
       {showSuccess && itineraireCreé ? (
         // Écran de succès avec QR code
         <div className="space-y-6">
@@ -446,53 +433,30 @@ export default function ModalAssignerItineraire({
             </div>
           </div>
 
-          {/* Statistiques */}
-          <div className="bg-gray-50 rounded-lg p-4">
-            <p className="text-sm font-semibold text-gray-700 mb-3">📊 Statistiques prévisionnelles</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="text-center">
-                <Users className="w-5 h-5 text-gray-600 mx-auto mb-1" />
-                <p className="text-xs text-gray-600">Bénéficiaires</p>
-                <p className="text-lg font-bold text-gray-800">
-                  {benefsComplets.length}
-                </p>
-              </div>
-              <div className="text-center">
-                <Navigation className="w-5 h-5 text-gray-600 mx-auto mb-1" />
-                <p className="text-xs text-gray-600">Distance totale</p>
-                <p className="text-lg font-bold text-gray-800">
-                  {formaterDistance(statsPrevisionnelles.distanceTotale)}
-                </p>
-              </div>
-            </div>
-            {/*Parcours détaillé */}
-              {statsPrevisionnelles.parcours && statsPrevisionnelles.parcours.length > 0 && (
-                <div className="border-t pt-3">
-                  <p className="text-xs font-semibold text-gray-600 mb-2">📍 Parcours détaillé :</p>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {statsPrevisionnelles.parcours.map((etape, idx) => (
-                      <div key={idx} className="flex items-center gap-2 text-xs">
-                        <span className="text-gray-500 font-mono">{idx + 1}.</span>
-                        <span className="text-gray-700 truncate flex-1">
-                          {etape.de} → {etape.vers}
-                        </span>
-                        <span className="text-emerald-600 font-semibold whitespace-nowrap">
-                          {formaterDistance(etape.distance * 1000)}
-                        </span>
-                      </div>
-                    ))}
+          {/* ✅ Parcours détaillé uniquement */}
+          {statsPrevisionnelles.parcours && statsPrevisionnelles.parcours.length > 0 && (
+            <div className="bg-gray-50 rounded-lg p-4">
+              <p className="text-sm font-semibold text-gray-700 mb-3">📍 Parcours détaillé</p>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {statsPrevisionnelles.parcours.map((etape, idx) => (
+                  <div key={idx} className="flex items-center gap-2 text-xs">
+                    <span className="text-gray-500 font-mono">{idx + 1}.</span>
+                    <span className="text-gray-700 truncate flex-1">
+                      {etape.de} → {etape.vers}
+                    </span>
+                    <span className="text-emerald-600 font-semibold whitespace-nowrap">
+                      {formaterDistance(etape.distance * 1000)}
+                    </span>
                   </div>
-                </div>
-              )}
+                ))}
+              </div>
             </div>
-
-
+          )}
 
           <div className="border-t pt-4" />
 
           {/* Formulaire */}
           <div className="space-y-4">
-
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Nom du bénévole <span className="text-gray-400">(optionnel)</span>

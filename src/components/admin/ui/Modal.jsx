@@ -20,9 +20,9 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' })
       />
 
       {/* Modal */}
-      <div className={`relative bg-white rounded-2xl shadow-2xl ${sizeClasses[size]} w-full max-h-[90vh] overflow-hidden`}>
+      <div className={`relative bg-white rounded-2xl shadow-2xl ${sizeClasses[size]} w-full h-[90vh] flex flex-col overflow-hidden`}>
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b-2 border-gray-200">
+        <div className="flex items-center justify-between p-6 border-b-2 border-gray-200 flex-shrink-0">
           <h2 className="text-2xl font-bold text-gray-800">{title}</h2>
           <button
             onClick={onClose}
@@ -33,7 +33,7 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' })
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
+        <div className="p-6 overflow-y-auto flex-1">
           {children}
         </div>
       </div>
