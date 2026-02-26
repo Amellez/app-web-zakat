@@ -157,6 +157,10 @@ export async function updateBeneficiaireStatut(id, statut) {
 /**
  * 🔒 NOUVELLE FONCTION : Récupère les packs filtrés par mosquée
  */
+/**
+ * 🔒 NOUVELLE FONCTION : Récupère les packs filtrés par mosquée
+ * 🔥 MODIFIÉ : Retourne { standard: [...], supplements: [...] }
+ */
 export async function getPacks(mosqueeId = null) {
   try {
     let q;
@@ -168,10 +172,25 @@ export async function getPacks(mosqueeId = null) {
     }
     
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
+    const allPacks = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
+    
+    // 🔥 NOUVEAU : Séparer en standard et supplements
+    const standard = allPacks.filter(p => p.type === 'standard');
+    const supplements = allPacks.filter(p => p.type === 'supplement' || p.type === 'bonus');
+    
+    console.log('📦 Packs chargés:', { 
+      total: allPacks.length, 
+      standard: standard.length, 
+      supplements: supplements.length 
+    });
+    
+    return {
+      standard,
+      supplements
+    };
   } catch (error) {
     handleFirebaseError(error, 'la récupération des packs');
   }
@@ -200,7 +219,7 @@ export async function genererEtSauvegarderPacks(mosqueeId) {
     console.log(`   - Bénéficiaires: ${beneficiaires.length} personnes`);
     console.log(`   - Répartition: ${parametres.repartition.standard}% standard / ${parametres.repartition.supplement}% supplément`);
     
-    const { packsStandard, packsSupplements } = genererPacksAutomatiques(inventaire, beneficiaires, parametres);
+    const { packsStandard, packsSupplements } = await genererPacksAutomatiques(inventaire, beneficiaires, parametres);
     
     const tousLesPacks = [...packsStandard, ...packsSupplements];
     
@@ -277,9 +296,13 @@ export async function genererEtSauvegarderPacks(mosqueeId) {
 export async function attribuerPacksAuxBeneficiaires(mosqueeId) {
   try {
     const beneficiaires = await getBeneficiaires(mosqueeId);
-    const packs = await getPacks(mosqueeId);
+    const packsData = await getPacks(mosqueeId);
+    
+    // 🔥 FIX : getPacks retourne maintenant { standard: [...], supplements: [...] }
+    const packs = [...(packsData.standard || []), ...(packsData.supplements || [])];
     
     console.log(`🎯 Attribution des packs aux bénéficiaires de la mosquée ${mosqueeId}...`);
+    console.log(`📦 Packs disponibles: ${packs.length} (${packsData.standard?.length || 0} standard + ${packsData.supplements?.length || 0} suppléments)`);
     
     // Filtrer les bénéficiaires validés sans pack
     const beneficiairesAAttribuer = beneficiaires.filter(
@@ -368,6 +391,21 @@ export async function supprimerTousLesPacks(mosqueeId) {
 
     console.log(`🗑️ Suppression de tous les packs de la mosquée ${mosqueeId}...`);
     
+    // 🔥 NOUVEAU : Réinitialiser les bénéficiaires AVANT suppression
+    const beneficiaires = await getBeneficiaires(mosqueeId);
+    const benefsAvecPacks = beneficiaires.filter(b => b.packId || b.packSupplementId);
+    
+    console.log(`🔄 Réinitialisation de ${benefsAvecPacks.length} bénéficiaires...`);
+    for (const benef of benefsAvecPacks) {
+      await updateDoc(doc(db, 'beneficiaires', benef.id), {
+        packId: null,
+        packSupplementId: null,
+        statut: 'Validé',
+        dateAttribution: null
+      });
+    }
+    console.log(`✅ ${benefsAvecPacks.length} bénéficiaires réinitialisés`);
+    
     const querySnapshot = await getDocs(
       query(collection(db, 'packs'), where('mosqueeId', '==', mosqueeId))
     );
@@ -413,6 +451,75 @@ export async function ajouterBeneficiaire(beneficiaire) {
     return docRef.id;
   } catch (error) {
     handleFirebaseError(error, 'l\'ajout du bénéficiaire');
+  }
+}
+
+/**
+ * 🔥 NOUVEAU : Ajoute plusieurs bénéficiaires en une seule transaction batch
+ * Optimisé pour les imports massifs - NE génère PAS les packs automatiquement
+ * @param {Array} beneficiaires - Tableau de bénéficiaires à ajouter
+ * @param {string} mosqueeId - ID de la mosquée
+ * @returns {Promise<{success: number, errors: Array}>}
+ */
+export async function ajouterBeneficiairesBatch(beneficiaires, mosqueeId) {
+  try {
+    if (!mosqueeId) {
+      throw new Error('Une mosquée doit être spécifiée pour l\'import batch');
+    }
+
+    if (!Array.isArray(beneficiaires) || beneficiaires.length === 0) {
+      throw new Error('Le tableau de bénéficiaires est vide ou invalide');
+    }
+
+    console.log(`📦 Import batch de ${beneficiaires.length} bénéficiaires pour mosquée ${mosqueeId}`);
+
+    // Firebase limite à 500 opérations par batch
+    const BATCH_SIZE = 500;
+    let totalSuccess = 0;
+    const errors = [];
+
+    // Découper en chunks de 500
+    for (let i = 0; i < beneficiaires.length; i += BATCH_SIZE) {
+      const chunk = beneficiaires.slice(i, i + BATCH_SIZE);
+      const batch = writeBatch(db);
+
+      chunk.forEach((beneficiaire) => {
+        try {
+          // Créer une nouvelle référence de document
+          const newDocRef = doc(collection(db, 'beneficiaires'));
+          
+          // Ajouter au batch
+          batch.set(newDocRef, {
+            ...beneficiaire,
+            mosqueeId,
+            createdAt: new Date().toISOString()
+          });
+          
+          totalSuccess++;
+        } catch (error) {
+          errors.push({
+            beneficiaire: beneficiaire.nom,
+            error: error.message
+          });
+        }
+      });
+
+      // Exécuter le batch
+      await batch.commit();
+      console.log(`✅ Batch ${Math.floor(i / BATCH_SIZE) + 1} committé (${chunk.length} bénéficiaires)`);
+    }
+
+    console.log(`🎉 Import batch terminé: ${totalSuccess} succès, ${errors.length} erreurs`);
+    console.log(`⚠️ IMPORTANT: Les packs ne sont PAS générés automatiquement. Utilisez le bouton "Générer les packs" manuellement.`);
+    
+    return {
+      success: totalSuccess,
+      errors
+    };
+
+  } catch (error) {
+    console.error('❌ Erreur import batch:', error);
+    throw error;
   }
 }
 

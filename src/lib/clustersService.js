@@ -21,6 +21,38 @@ import {
 } from './routeOptimizer';
 
 /**
+ * 🔥 FONCTION UTILITAIRE : Nettoie les valeurs undefined pour Firebase
+ */
+function cleanFirebaseData(obj) {
+  if (obj === null || obj === undefined) return null;
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => cleanFirebaseData(item)).filter(item => item !== null && item !== undefined);
+  }
+  
+  if (typeof obj === 'object') {
+    const cleaned = {};
+    for (const [key, value] of Object.entries(obj)) {
+      // Ignorer les valeurs undefined
+      if (value === undefined) {
+        cleaned[key] = null; // Remplacer undefined par null
+        continue;
+      }
+      
+      // Nettoyer récursivement les objets et arrays
+      if (typeof value === 'object' && value !== null) {
+        cleaned[key] = cleanFirebaseData(value);
+      } else {
+        cleaned[key] = value;
+      }
+    }
+    return cleaned;
+  }
+  
+  return obj;
+}
+
+/**
  * Génère les clusters automatiquement (SANS assignation)
  */
 export async function genererClusters(beneficiaires, mosqueeId, options = {}) {
@@ -147,35 +179,46 @@ export async function genererClusters(beneficiaires, mosqueeId, options = {}) {
       const stats = calculerStatistiquesItineraire(clusterOptimise, coordsMosquee);
 
       // Générer le nom
-      // Générer le nom
       const nom = genererNomItineraire(clusterOptimise, i);
       console.log(`🏷️ Nom généré pour cluster ${i}:`, nom);
 
-      // Créer l'objet cluster
+      // 🔥 Créer l'objet cluster avec nettoyage des undefined
       const cluster = {
-        nom,
+        nom: nom || `Cluster ${i + 1}`,
         mosqueeId: mosqueeId,
-        statut: 'Non assigné', // ⚪ Nouveau : aucun bénéficiaire assigné
+        statut: 'Non assigné',
         beneficiaires: clusterOptimise.map(b => ({
-          id: b.id,
-          nom: b.nom,
-          adresse: b.adresse,
-          telephone: b.telephone,
-          nbPersonnes: b.nbPersonnes,
-          tailleFamille: b.tailleFamille,
-          coords: b.coords,
-          packId: b.packId,
-          packSupplementId: b.packSupplementId,
-          estAssigne: false, // ✅ Nouveau : non assigné par défaut
-          itineraireId: null // ✅ Nouveau : pas encore dans un itinéraire
+          id: b.id || null,
+          nom: b.nom || 'Inconnu',
+          adresse: b.adresse || '',
+          telephone: b.telephone || null,
+          nbPersonnes: b.nbPersonnes || null,
+          tailleFamille: b.tailleFamille || null,
+          coords: b.coords ? {
+            lat: b.coords.lat || 0,
+            lng: b.coords.lng || 0
+          } : null,
+          packId: b.packId || null,
+          packSupplementId: b.packSupplementId || null,
+          estAssigne: false,
+          itineraireId: null
         })),
-        statistiques: stats,
+        statistiques: {
+          nombreBeneficiaires: stats?.nombreBeneficiaires || 0,
+          distanceDepuisMosquee: stats?.distanceDepuisMosquee || 0,
+          distanceTotale: stats?.distanceTotale || 0,
+          dureeTotale: stats?.dureeTotale || 0
+        },
         dateCreation: new Date().toISOString(),
         dateModification: new Date().toISOString()
       };
 
-      const docRef = await addDoc(collection(db, 'clusters'), cluster);
-      clusters.push({ id: docRef.id, ...cluster });
+      // 🔥 Nettoyer les undefined avant sauvegarde
+      const cleanedCluster = cleanFirebaseData(cluster);
+
+      console.log(`💾 Sauvegarde du cluster ${i}...`);
+      const docRef = await addDoc(collection(db, 'clusters'), cleanedCluster);
+      clusters.push({ id: docRef.id, ...cleanedCluster });
       console.log(`✅ Cluster créé: ${docRef.id}`);
     }
 

@@ -4,14 +4,35 @@ import React, { useState } from 'react';
 import { Loader2, Package, AlertCircle } from 'lucide-react';
 import Modal from '../ui/Modal';
 import { ajouterArticleInventaire, getInventaire } from '@/lib/firebaseAdmin';
-import { useMosquee } from '@/context/MosqueeContext'; // 🔥 AJOUTÉ
+import { useMosquee } from '@/context/MosqueeContext';
+
+// 🔥 LISTE PRÉDÉFINIE DE PRODUITS
+const PRODUITS_PREDEFINIES = [
+  'Riz',
+  'Pâtes',
+  'Couscous',
+  'Semoule',
+  'Lentilles',
+  'Huile',
+  'Sucre',
+  'Farine',
+  'Thé',
+  'Café',
+  'Lait en poudre',
+  'Conserves',
+  'Tomate concentrée',
+  'Harissa',
+  'Épices',
+  'Autre' // Option pour produit personnalisé
+];
 
 export default function ModalAjouterArticle({ isOpen, onClose, onSuccess }) {
-  const { mosqueeActive, getMosqueeActiveData } = useMosquee(); // 🔥 AJOUTÉ
-  const mosqueeData = getMosqueeActiveData(); // 🔥 AJOUTÉ
+  const { mosqueeActive, getMosqueeActiveData } = useMosquee();
+  const mosqueeData = getMosqueeActiveData();
   
   const [formData, setFormData] = useState({
-    nom: '',
+    produitPredifini: '',
+    nomPersonnalise: '',
     quantite: '',
     unite: 'kg'
   });
@@ -32,12 +53,25 @@ export default function ModalAjouterArticle({ isOpen, onClose, onSuccess }) {
     setError('');
 
     try {
-      // 🔥 VÉRIFICATION mosqueeActive
       if (!mosqueeActive || mosqueeActive === 'ALL') {
         throw new Error('Veuillez sélectionner une mosquée spécifique pour ajouter un article');
       }
 
-      if (!formData.nom || !formData.quantite || !formData.unite) {
+      // 🔥 Déterminer le nom final
+      let nomFinal = '';
+      if (formData.produitPredifini === 'Autre') {
+        if (!formData.nomPersonnalise.trim()) {
+          throw new Error('Veuillez saisir le nom du produit');
+        }
+        nomFinal = formData.nomPersonnalise.trim();
+      } else {
+        if (!formData.produitPredifini) {
+          throw new Error('Veuillez sélectionner un produit');
+        }
+        nomFinal = formData.produitPredifini;
+      }
+
+      if (!formData.quantite || !formData.unite) {
         throw new Error('Veuillez remplir tous les champs');
       }
 
@@ -45,29 +79,30 @@ export default function ModalAjouterArticle({ isOpen, onClose, onSuccess }) {
         throw new Error('La quantité doit être positive');
       }
 
-      // 🔥 NOUVEAU : Vérifier les doublons
+      // Vérifier les doublons
       console.log('🔍 Vérification des doublons...');
       const inventaireExistant = await getInventaire(mosqueeActive);
       
-      const nomNormalise = formData.nom.trim().toLowerCase();
+      const nomNormalise = nomFinal.toLowerCase();
       const articleExistant = inventaireExistant.find(
         item => item.nom.trim().toLowerCase() === nomNormalise
       );
 
       if (articleExistant) {
-        throw new Error(`❌ Un article nommé "${articleExistant.nom}" existe déjà dans l'inventaire de cette mosquée`);
+        throw new Error(`❌ Un article nommé "${articleExistant.nom}" existe déjà dans l'inventaire`);
       }
 
-      // 🔥 MODIFIÉ : Passer mosqueeActive avec seuil par défaut
       await ajouterArticleInventaire({
-        nom: formData.nom.trim(),
+        nom: nomFinal,
         quantite: parseFloat(formData.quantite),
         unite: formData.unite,
-        seuil: 50 // Seuil par défaut
+        seuil: 50
       }, mosqueeActive);
 
+      // Reset form
       setFormData({
-        nom: '',
+        produitPredifini: '',
+        nomPersonnalise: '',
         quantite: '',
         unite: 'kg'
       });
@@ -102,6 +137,11 @@ export default function ModalAjouterArticle({ isOpen, onClose, onSuccess }) {
     );
   }
 
+  // 🔥 Déterminer le nom à afficher dans la prévisualisation
+  const nomAffiche = formData.produitPredifini === 'Autre' 
+    ? formData.nomPersonnalise 
+    : formData.produitPredifini;
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Ajouter un Article" size="md">
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -112,22 +152,42 @@ export default function ModalAjouterArticle({ isOpen, onClose, onSuccess }) {
           </p>
         </div>
 
+        {/* 🔥 NOUVEAU : Select avec produits prédéfinis */}
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Nom de l'article *
+            Produit *
           </label>
-          <input
-            type="text"
-            name="nom"
-            value={formData.nom}
+          <select
+            name="produitPredifini"
+            value={formData.produitPredifini}
             onChange={handleChange}
-            placeholder="Ex: Riz, Farine, Huile..."
             className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-emerald-500 focus:outline-none"
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            Articles prioritaires : Riz, Pâtes, Semoule, Couscous
-          </p>
+          >
+            <option value="">-- Sélectionner un produit --</option>
+            {PRODUITS_PREDEFINIES.map(produit => (
+              <option key={produit} value={produit}>
+                {produit}
+              </option>
+            ))}
+          </select>
         </div>
+
+        {/* 🔥 NOUVEAU : Input personnalisé si "Autre" sélectionné */}
+        {formData.produitPredifini === 'Autre' && (
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Nom du produit personnalisé *
+            </label>
+            <input
+              type="text"
+              name="nomPersonnalise"
+              value={formData.nomPersonnalise}
+              onChange={handleChange}
+              placeholder="Ex: Dates, Miel, etc."
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-emerald-500 focus:outline-none"
+            />
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -170,12 +230,13 @@ export default function ModalAjouterArticle({ isOpen, onClose, onSuccess }) {
           </div>
         )}
 
-        {formData.nom && formData.quantite && (
+        {/* Prévisualisation */}
+        {nomAffiche && formData.quantite && (
           <div className="p-4 bg-emerald-50 border-2 border-emerald-200 rounded-lg">
             <div className="flex items-center gap-3">
               <Package className="w-10 h-10 text-emerald-600" />
               <div>
-                <p className="font-semibold text-gray-800">{formData.nom}</p>
+                <p className="font-semibold text-gray-800">{nomAffiche}</p>
                 <p className="text-sm text-gray-600">
                   {formData.quantite} {formData.unite} disponibles
                 </p>

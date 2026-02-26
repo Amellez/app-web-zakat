@@ -1,26 +1,24 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Plus, RefreshCw, Loader2, Zap, CheckCircle2 } from 'lucide-react';
+import { Plus, RefreshCw, Loader2, Save, AlertTriangle } from 'lucide-react';
 import InventaireCard from './InventaireCard';
 import ModalAjouterArticle from './ModalAjouterArticle';
-import { useMosquee } from '@/context/MosqueeContext'; // 🔥 AJOUTÉ
+import { useMosquee } from '@/context/MosqueeContext';
 import { 
   getInventaire, 
   updateArticleInventaire, 
-  supprimerArticleInventaire,
-  ecouterInventaire 
+  supprimerArticleInventaire
 } from '@/lib/firebaseAdmin';
 
 export default function InventaireTab({ inventaire, setInventaire, beneficiaires }) {
-  const { mosqueeActive } = useMosquee(); // 🔥 AJOUTÉ
-  const [editingId, setEditingId] = useState(null);
-  const [editValue, setEditValue] = useState('');
-  const [editName, setEditName] = useState(''); // 🔥 NOUVEAU : Pour éditer le nom
+  const { mosqueeActive } = useMosquee();
+  const [inventaireOriginal, setInventaireOriginal] = useState([]); // 🔥 NOUVEAU : Pour comparer
+  const [modificationsEnCours, setModificationsEnCours] = useState({}); // 🔥 NOUVEAU : Tracker les modifs
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [isRegenerating, setIsRegenerating] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   useEffect(() => {
     if (mosqueeActive) {
@@ -28,14 +26,30 @@ export default function InventaireTab({ inventaire, setInventaire, beneficiaires
     }
   }, [mosqueeActive]);
 
+  // 🔥 NOUVEAU : Warning avant de quitter la page
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = 'Vous avez des modifications non enregistrées. Voulez-vous vraiment quitter ?';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
   const chargerInventaire = async () => {
     if (!mosqueeActive) return;
     
     setLoading(true);
     try {
-      const data = await getInventaire(mosqueeActive); // 🔥 MODIFIÉ
+      const data = await getInventaire(mosqueeActive);
       setInventaire(data);
-      setLastUpdate(new Date());
+      setInventaireOriginal(JSON.parse(JSON.stringify(data))); // Deep copy
+      setModificationsEnCours({});
+      setHasUnsavedChanges(false);
     } catch (error) {
       console.error('Erreur chargement inventaire:', error);
     } finally {
@@ -43,95 +57,108 @@ export default function InventaireTab({ inventaire, setInventaire, beneficiaires
     }
   };
 
-  const handleEdit = (id, currentQuantite, currentNom) => {
-    setEditingId(id);
-    setEditValue(currentQuantite.toString());
-    setEditName(currentNom); // 🔥 NOUVEAU
+  // 🔥 NOUVEAU : Marquer un article comme modifié
+  const handleModificationLocale = (id, nouveauNom, nouvelleQuantite) => {
+    setInventaire(prev => prev.map(item =>
+      item.id === id 
+        ? { ...item, nom: nouveauNom, quantite: parseFloat(nouvelleQuantite) }
+        : item
+    ));
+
+    setModificationsEnCours(prev => ({
+      ...prev,
+      [id]: { nom: nouveauNom, quantite: parseFloat(nouvelleQuantite) }
+    }));
+
+    setHasUnsavedChanges(true);
   };
 
-  const handleCancel = () => {
-    setEditingId(null);
-    setEditValue('');
-    setEditName(''); // 🔥 NOUVEAU
+  // 🔥 NOUVEAU : Annuler toutes les modifications
+  const handleAnnulerTout = () => {
+    if (!confirm('Annuler toutes les modifications non enregistrées ?')) {
+      return;
+    }
+
+    setInventaire(JSON.parse(JSON.stringify(inventaireOriginal)));
+    setModificationsEnCours({});
+    setHasUnsavedChanges(false);
   };
 
-  const handleSave = async (id) => {
+  // 🔥 NOUVEAU : Enregistrer toutes les modifications d'un coup
+  const handleEnregistrerTout = async () => {
+    if (Object.keys(modificationsEnCours).length === 0) {
+      alert('Aucune modification à enregistrer');
+      return;
+    }
+
+    const confirmation = confirm(
+      `Enregistrer ${Object.keys(modificationsEnCours).length} modification(s) ?\n\n` +
+      `⚡ Les packs seront automatiquement régénérés après l'enregistrement.`
+    );
+
+    if (!confirmation) return;
+
+    setSaving(true);
     try {
-      setIsRegenerating(true);
-      
-      // 🔥 NOUVEAU : Mise à jour avec nom ET quantité
-      const updates = {
-        quantite: parseFloat(editValue)
-      };
-      
-      // Ajouter le nom seulement s'il a changé
-      const currentItem = inventaire.find(item => item.id === id);
-      if (editName.trim() && editName.trim() !== currentItem.nom) {
-        updates.nom = editName.trim();
-      }
-      
-      await updateArticleInventaire(id, updates, mosqueeActive);
+      // Sauvegarder toutes les modifications en parallèle
+      const promises = Object.entries(modificationsEnCours).map(([id, updates]) =>
+        updateArticleInventaire(id, updates, mosqueeActive)
+      );
 
-      setInventaire(prev => prev.map(item =>
-        item.id === id ? { ...item, ...updates } : item
-      ));
-      
-      setEditingId(null);
-      setEditName(''); // 🔥 NOUVEAU
-      setLastUpdate(new Date());
+      await Promise.all(promises);
 
-      console.log('✅ Article mis à jour - Packs régénérés automatiquement');
-      
-      setTimeout(() => {
-        setIsRegenerating(false);
-      }, 2000);
-      
+      // Mettre à jour l'original
+      setInventaireOriginal(JSON.parse(JSON.stringify(inventaire)));
+      setModificationsEnCours({});
+      setHasUnsavedChanges(false);
+
+      alert(`✅ ${Object.keys(modificationsEnCours).length} modification(s) enregistrée(s) avec succès !\n\n🔄 Les packs ont été automatiquement régénérés.`);
+
     } catch (error) {
-      console.error('Erreur mise à jour:', error);
-      alert('Erreur lors de la mise à jour');
-      setIsRegenerating(false);
+      console.error('Erreur enregistrement:', error);
+      alert('❌ Erreur lors de l\'enregistrement');
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleDelete = async (id) => {
-    const confirmation = await confirm('Êtes-vous sûr de vouloir supprimer cet article ? Cette action est irréversible.');
-    if (!confirmation) {
-      return;
-    }
+    const confirmation = confirm(
+      'Êtes-vous sûr de vouloir supprimer cet article ?\n\n' +
+      '⚠️ Cette action est irréversible.\n' +
+      '⚡ Les packs seront automatiquement régénérés.'
+    );
+    
+    if (!confirmation) return;
 
     try {
-      setIsRegenerating(true);
-      
-      await supprimerArticleInventaire(id, mosqueeActive); // 🔥 AJOUTÉ
+      setSaving(true);
+      await supprimerArticleInventaire(id, mosqueeActive);
 
       setInventaire(prev => prev.filter(item => item.id !== id));
+      setInventaireOriginal(prev => prev.filter(item => item.id !== id));
       
-      alert('✅ Article supprimé avec succès');
-      setLastUpdate(new Date());
+      // Supprimer des modifications en cours si présent
+      const newModifs = { ...modificationsEnCours };
+      delete newModifs[id];
+      setModificationsEnCours(newModifs);
 
-      console.log('✅ Article supprimé - Packs régénérés automatiquement');
-      
-      setTimeout(() => {
-        setIsRegenerating(false);
-      }, 2000);
+      alert('✅ Article supprimé avec succès !\n\n🔄 Les packs ont été automatiquement régénérés.');
       
     } catch (error) {
       console.error('Erreur suppression:', error);
       alert('❌ Erreur lors de la suppression');
-      setIsRegenerating(false);
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleSuccess = async () => {
-    setIsRegenerating(true);
     await chargerInventaire();
-    
-    console.log('✅ Article ajouté - Packs régénérés automatiquement');
-    
-    setTimeout(() => {
-      setIsRegenerating(false);
-    }, 2000);
+    alert('✅ Article ajouté avec succès !\n\n🔄 Les packs ont été automatiquement régénérés.');
   };
+
+  const nombreModifications = Object.keys(modificationsEnCours).length;
 
   return (
     <div className="space-y-6">
@@ -140,16 +167,18 @@ export default function InventaireTab({ inventaire, setInventaire, beneficiaires
         <div className="flex gap-3">
           <button
             onClick={chargerInventaire}
-            disabled={loading || !mosqueeActive}
+            disabled={loading || !mosqueeActive || hasUnsavedChanges}
             className="flex items-center gap-2 px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
+            title={hasUnsavedChanges ? 'Enregistrez d\'abord vos modifications' : 'Actualiser'}
           >
             <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
             Actualiser
           </button>
           <button
             onClick={() => setShowModal(true)}
-            disabled={!mosqueeActive}
+            disabled={!mosqueeActive || hasUnsavedChanges}
             className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition disabled:opacity-50"
+            title={hasUnsavedChanges ? 'Enregistrez d\'abord vos modifications' : 'Ajouter un article'}
           >
             <Plus className="w-5 h-5" />
             Ajouter un produit
@@ -157,51 +186,55 @@ export default function InventaireTab({ inventaire, setInventaire, beneficiaires
         </div>
       </div>
 
-      <div className="bg-gradient-to-r from-emerald-50 to-blue-50 border-2 border-emerald-200 rounded-lg p-4">
-        <div className="flex items-start gap-3">
-          <Zap className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-emerald-800 flex items-center gap-2">
-              Régénération automatique activée en permanence
-              {!isRegenerating ? (
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              ) : (
-                <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
-              )}
-            </p>
-            <p className="text-sm text-emerald-700 mt-1">
-              Les packs sont automatiquement régénérés à chaque modification de l'inventaire (ajout, modification, suppression).
-              {isRegenerating && (
-                <span className="block mt-1 text-blue-600 font-semibold">
-                  🔄 Régénération en cours...
-                </span>
-              )}
-            </p>
-          </div>
-        </div>
-        
-        {lastUpdate && (
-          <div className="mt-3 pt-3 border-t border-emerald-200">
-            <p className="text-xs text-emerald-600">
-              Dernière mise à jour : {lastUpdate.toLocaleTimeString('fr-FR')}
-            </p>
-          </div>
-        )}
-      </div>
-
-      {isRegenerating && (
-        <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 flex items-center gap-3 animate-pulse">
-          <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-blue-800">
-              Régénération automatique des packs en cours...
-            </p>
-            <p className="text-xs text-blue-600 mt-1">
-              Les packs se mettent à jour automatiquement suite à votre modification
-            </p>
+      {/* 🔥 NOUVEAU : Barre de modifications en cours */}
+      {hasUnsavedChanges && (
+        <div className="bg-gradient-to-r from-orange-50 to-yellow-50 border-2 border-orange-300 rounded-lg p-4 shadow-lg">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-6 h-6 text-orange-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-bold text-orange-800 mb-2">
+                ⚠️ {nombreModifications} modification(s) non enregistrée(s)
+              </p>
+              <p className="text-xs text-orange-700 mb-3">
+                Les modifications sont enregistrées localement. Cliquez sur "Enregistrer" pour sauvegarder et régénérer les packs automatiquement.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleEnregistrerTout}
+                  disabled={saving}
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-semibold disabled:opacity-50"
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Enregistrement...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      Enregistrer ({nombreModifications})
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={handleAnnulerTout}
+                  disabled={saving}
+                  className="px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-semibold disabled:opacity-50"
+                >
+                  Annuler tout
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
+
+      {/* Info régénération automatique */}
+      <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+        <p className="text-sm text-blue-800">
+          ⚡ <strong>Régénération automatique :</strong> Les packs sont automatiquement régénérés après chaque enregistrement (ajout, modification, suppression).
+        </p>
+      </div>
 
       {loading && inventaire.length === 0 ? (
         <div className="flex items-center justify-center py-12">
@@ -224,15 +257,10 @@ export default function InventaireTab({ inventaire, setInventaire, beneficiaires
             <InventaireCard
               key={item.id}
               item={item}
-              onEdit={handleEdit}
-              onCancel={handleCancel}
-              onSave={handleSave}
+              onModification={handleModificationLocale}
               onDelete={handleDelete}
-              editingId={editingId}
-              editValue={editValue}
-              setEditValue={setEditValue}
-              editName={editName}
-              setEditName={setEditName}
+              isModified={!!modificationsEnCours[item.id]}
+              disabled={saving}
             />
           ))}
         </div>

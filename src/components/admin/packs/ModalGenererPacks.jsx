@@ -3,11 +3,11 @@
 import React, { useState } from 'react';
 import { Loader2, CheckCircle, AlertCircle, Package, TrendingUp, Gift } from 'lucide-react';
 import Modal from '../ui/Modal';
-import { useMosquee } from '@/context/MosqueeContext'; // 🔥 AJOUTÉ
+import { useMosquee } from '@/context/MosqueeContext';
 import { genererEtSauvegarderPacks, attribuerPacksAuxBeneficiaires } from '@/lib/firebaseAdmin';
 
 export default function ModalGenererPacks({ isOpen, onClose, onSuccess, inventaire, beneficiaires }) {
-  const { mosqueeActive } = useMosquee(); // 🔥 AJOUTÉ
+  const { mosqueeActive } = useMosquee();
   const [loading, setLoading] = useState(false);
   const [etape, setEtape] = useState('confirmation'); // confirmation, generation, attribution, success
   const [resultat, setResultat] = useState(null);
@@ -52,7 +52,6 @@ export default function ModalGenererPacks({ isOpen, onClose, onSuccess, inventai
   };
 
   const handleGenerer = async () => {
-    // 🔥 VÉRIFICATION mosqueeActive
     if (!mosqueeActive || mosqueeActive === 'ALL') {
       alert('Erreur: Veuillez sélectionner une mosquée spécifique pour générer les packs');
       return;
@@ -63,7 +62,7 @@ export default function ModalGenererPacks({ isOpen, onClose, onSuccess, inventai
 
     try {
       // 1. Générer les packs
-      const resultGeneration = await genererEtSauvegarderPacks(mosqueeActive); // 🔥 MODIFIÉ
+      const resultGeneration = await genererEtSauvegarderPacks(mosqueeActive);
       
       if (!resultGeneration.success) {
         throw new Error(resultGeneration.message);
@@ -72,7 +71,7 @@ export default function ModalGenererPacks({ isOpen, onClose, onSuccess, inventai
       setEtape('attribution');
 
       // 2. Attribuer les packs aux bénéficiaires
-      const resultAttribution = await attribuerPacksAuxBeneficiaires(mosqueeActive); // 🔥 MODIFIÉ
+      const resultAttribution = await attribuerPacksAuxBeneficiaires(mosqueeActive);
 
       if (!resultAttribution.success) {
         throw new Error(resultAttribution.message);
@@ -120,11 +119,11 @@ export default function ModalGenererPacks({ isOpen, onClose, onSuccess, inventai
               Informations importantes
             </h3>
             <ul className="space-y-2 text-sm text-blue-800">
-              <li>• Les packs seront générés automatiquement selon le nouvel algorithme</li>
+              <li>• Les packs seront générés automatiquement avec un algorithme optimisé</li>
               <li>• Les anciens packs seront supprimés et remplacés</li>
               <li>• Les bénéficiaires validés recevront automatiquement leur pack</li>
               <li>• <strong>Articles favoris (RIZ, PÂTES, COUSCOUS) :</strong> Distribution 70%-30%</li>
-              <li>• <strong>Autres articles :</strong> Distribution 100% avec coefficients</li>
+              <li>• <strong>Coefficients dynamiques :</strong> Calculés automatiquement pour minimiser les restes</li>
             </ul>
           </div>
 
@@ -147,21 +146,26 @@ export default function ModalGenererPacks({ isOpen, onClose, onSuccess, inventai
             </div>
           </div>
 
-          {/* Aperçu de la distribution */}
+          {/* 🔥 NOUVEAU : Aperçu distribution intelligente */}
           <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-lg p-6">
-            <h3 className="font-bold text-emerald-900 mb-4">🎯 Logique de distribution</h3>
+            <h3 className="font-bold text-emerald-900 mb-4">🤖 Distribution Intelligente</h3>
             <div className="space-y-3 text-sm">
               <div className="flex justify-between items-center p-3 bg-white rounded-lg">
-                <span className="text-gray-700">Coefficients famille</span>
-                <span className="font-semibold text-gray-900">Petite: 1 | Moyenne: 2 | Grande: 3</span>
+                <span className="text-gray-700">Coefficients de distribution</span>
+                <span className="font-semibold text-gray-900">Calculés automatiquement</span>
               </div>
               <div className="flex justify-between items-center p-3 bg-white rounded-lg">
                 <span className="text-gray-700">Articles favoris (RIZ/PÂTES/COUSCOUS)</span>
-                <span className="font-semibold text-gray-900">70% avec coef + 30% équitable</span>
+                <span className="font-semibold text-gray-900">70% optimal + 30% équitable</span>
               </div>
               <div className="flex justify-between items-center p-3 bg-white rounded-lg">
                 <span className="text-gray-700">Autres articles</span>
-                <span className="font-semibold text-gray-900">100% avec coefficient</span>
+                <span className="font-semibold text-gray-900">100% avec algorithme intelligent</span>
+              </div>
+              <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+                <p className="text-xs text-blue-800">
+                  💡 <strong>L'algorithme minimise les restes</strong> et garantit que toutes les familles reçoivent au moins quelque chose, quelle que soit leur taille.
+                </p>
               </div>
             </div>
           </div>
@@ -206,7 +210,7 @@ export default function ModalGenererPacks({ isOpen, onClose, onSuccess, inventai
             </h3>
             <p className="text-gray-600 text-center">
               {etape === 'generation' 
-                ? 'Calcul des distributions en fonction de l\'inventaire et des articles favoris'
+                ? 'Calcul des distributions optimales avec coefficients dynamiques'
                 : 'Association des packs aux familles validées'}
             </p>
           </div>
@@ -219,11 +223,11 @@ export default function ModalGenererPacks({ isOpen, onClose, onSuccess, inventai
               </div>
               <div className={`flex items-center gap-3 ${etape === 'generation' ? 'text-emerald-600' : 'text-gray-400'}`}>
                 <CheckCircle className="w-5 h-5" />
-                <span className="text-sm font-medium">Calcul des distributions par taille</span>
+                <span className="text-sm font-medium">Calcul des coefficients dynamiques</span>
               </div>
               <div className={`flex items-center gap-3 ${etape === 'generation' ? 'text-emerald-600' : 'text-gray-400'}`}>
                 <CheckCircle className="w-5 h-5" />
-                <span className="text-sm font-medium">Calcul des suppléments par article favori</span>
+                <span className="text-sm font-medium">Distribution optimale par taille</span>
               </div>
               <div className={`flex items-center gap-3 ${etape === 'attribution' ? 'text-emerald-600' : 'text-gray-400'}`}>
                 {etape === 'attribution' ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}

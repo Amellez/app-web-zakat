@@ -1,38 +1,55 @@
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+/**
+ * Gestion des paramètres de configuration pour la génération des packs
+ * 🔥 VERSION COMPATIBLE : Supporte ancien (global) et nouveau (par mosquée)
+ */
+
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 
-// Paramètres par défaut
+/**
+ * Valeurs par défaut des paramètres
+ */
 export const PARAMETRES_DEFAUT = {
   repartition: {
-    standard: 70,
-    supplement: 30
-  },
-  coefficients: {
-    'Petite': 1,
-    'Moyenne': 2,
-    'Grande': 3
-  },
-  updatedAt: new Date().toISOString(),
-  updatedBy: null
+    standard: 70,      // 70% pour packs standard
+    supplement: 30     // 30% pour suppléments articles favoris
+  }
+  // 🔥 COEFFICIENTS SUPPRIMÉS : Maintenant calculés dynamiquement
 };
 
 /**
- * Récupère les paramètres de configuration
+ * 🔥 VERSION COMPATIBLE : Récupère les paramètres de configuration
+ * 
+ * Si mosqueeId fourni → Nouveau système (par mosquée)
+ * Si mosqueeId absent → Ancien système (global)
  */
-export async function getParametres() {
+export async function getParametres(mosqueeId = null) {
   try {
-    const docRef = doc(db, 'parametres', 'configuration');
+    let docRef;
+    
+    // 🔥 RÉTROCOMPATIBILITÉ
+    if (mosqueeId && mosqueeId !== 'ALL') {
+      // NOUVEAU SYSTÈME : Par mosquée
+      docRef = doc(db, 'mosquees', mosqueeId, 'configuration', 'parametres');
+    } else {
+      // ANCIEN SYSTÈME : Global
+      docRef = doc(db, 'parametres', 'configuration');
+    }
+    
     const docSnap = await getDoc(docRef);
     
     if (docSnap.exists()) {
-      return docSnap.data();
-    } else {
-      // Si les paramètres n'existent pas, créer avec les valeurs par défaut
-      await setDoc(docRef, PARAMETRES_DEFAUT);
-      return PARAMETRES_DEFAUT;
+      const data = docSnap.data();
+      
+      // Retourner uniquement la répartition (coefficients auto)
+      return {
+        repartition: data.repartition || PARAMETRES_DEFAUT.repartition
+      };
     }
+    
+    return PARAMETRES_DEFAUT;
   } catch (error) {
-    console.error('Erreur lors de la récupération des paramètres:', error);
+    console.error('Erreur récupération paramètres:', error);
     return PARAMETRES_DEFAUT;
   }
 }
@@ -40,35 +57,50 @@ export async function getParametres() {
 /**
  * Met à jour les paramètres de configuration
  */
-export async function updateParametres(nouveauxParametres, userEmail) {
+export async function updateParametres(parametres, mosqueeId = null, userId = null) {
   try {
-    const docRef = doc(db, 'parametres', 'configuration');
+    let docRef;
     
-    const parametres = {
-      ...nouveauxParametres,
-      updatedAt: new Date().toISOString(),
-      updatedBy: userEmail
+    // 🔥 RÉTROCOMPATIBILITÉ
+    if (mosqueeId && mosqueeId !== 'ALL') {
+      // NOUVEAU SYSTÈME : Par mosquée
+      docRef = doc(db, 'mosquees', mosqueeId, 'configuration', 'parametres');
+    } else {
+      // ANCIEN SYSTÈME : Global
+      docRef = doc(db, 'parametres', 'configuration');
+    }
+    
+    const dataToSave = {
+      repartition: parametres.repartition,
+      updatedAt: serverTimestamp(),
+      updatedBy: userId || 'system'
     };
     
-    await setDoc(docRef, parametres);
+    await setDoc(docRef, dataToSave, { merge: true });
     
-    console.log('✅ Paramètres mis à jour avec succès');
-    return { success: true };
+    console.log('✅ Paramètres sauvegardés:', dataToSave);
+    return true;
   } catch (error) {
-    console.error('Erreur lors de la mise à jour des paramètres:', error);
-    throw new Error('Erreur lors de la mise à jour des paramètres');
+    console.error('❌ Erreur sauvegarde paramètres:', error);
+    throw error;
   }
 }
 
 /**
- * Valide que les paramètres sont corrects
+ * Valide les paramètres avant sauvegarde
  */
 export function validerParametres(parametres) {
   const erreurs = [];
   
   // Vérifier la répartition
-  if (parametres.repartition) {
+  if (!parametres.repartition) {
+    erreurs.push('La répartition est obligatoire');
+  } else {
     const { standard, supplement } = parametres.repartition;
+    
+    if (typeof standard !== 'number' || typeof supplement !== 'number') {
+      erreurs.push('Les pourcentages doivent être des nombres');
+    }
     
     if (standard < 0 || standard > 100) {
       erreurs.push('Le pourcentage standard doit être entre 0 et 100');
@@ -78,27 +110,19 @@ export function validerParametres(parametres) {
       erreurs.push('Le pourcentage supplément doit être entre 0 et 100');
     }
     
-    if (Math.abs(standard + supplement - 100) > 0.1) {
-      erreurs.push('La somme des pourcentages doit être égale à 100%');
+    if (Math.abs((standard + supplement) - 100) > 0.01) {
+      erreurs.push('La somme des pourcentages doit égaler 100%');
     }
   }
   
-  // Vérifier les coefficients
-  if (parametres.coefficients) {
-    const { Petite, Moyenne, Grande } = parametres.coefficients;
-    
-    if (!Petite || Petite < 0.1 || Petite > 10) {
-      erreurs.push('Le coefficient Petite doit être entre 0.1 et 10');
-    }
-    
-    if (!Moyenne || Moyenne < 0.1 || Moyenne > 10) {
-      erreurs.push('Le coefficient Moyenne doit être entre 0.1 et 10');
-    }
-    
-    if (!Grande || Grande < 0.1 || Grande > 10) {
-      erreurs.push('Le coefficient Grande doit être entre 0.1 et 10');
-    }
-  }
+  // 🔥 SUPPRIMÉ : Validation des coefficients (auto maintenant)
   
   return erreurs;
+}
+
+/**
+ * Réinitialise les paramètres aux valeurs par défaut
+ */
+export async function resetParametres(mosqueeId = null, userId = null) {
+  return updateParametres(PARAMETRES_DEFAUT, mosqueeId, userId);
 }

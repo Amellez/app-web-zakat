@@ -1,13 +1,47 @@
-import React from 'react';
-import { Box, Edit, Save, Trash2, Package } from 'lucide-react';
+import React, { useState } from 'react';
+import { Edit, Trash2, Package, Check, X } from 'lucide-react';
 
-export default function InventaireCard({ item, onEdit, onCancel, onSave, onDelete, editingId, editValue, setEditValue, editName, setEditName }) {
-  const isEditing = editingId === item.id;
+export default function InventaireCard({ item, onModification, onDelete, isModified, disabled }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editNom, setEditNom] = useState(item.nom);
+  const [editQuantite, setEditQuantite] = useState(item.quantite.toString());
+
+  const handleStartEdit = () => {
+    setEditNom(item.nom);
+    setEditQuantite(item.quantite.toString());
+    setIsEditing(true);
+  };
+
+  const handleCancel = () => {
+    setEditNom(item.nom);
+    setEditQuantite(item.quantite.toString());
+    setIsEditing(false);
+  };
+
+  const handleSave = () => {
+    if (!editNom.trim() || !editQuantite || parseFloat(editQuantite) < 0) {
+      alert('Veuillez remplir correctement tous les champs');
+      return;
+    }
+
+    // 🔥 NOUVEAU : Notifier le parent sans sauvegarder dans Firebase
+    onModification(item.id, editNom.trim(), editQuantite);
+    setIsEditing(false);
+  };
 
   return (
-    <div className="group relative bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden border border-gray-100">
+    <div className={`group relative bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden border-2 ${
+      isModified ? 'border-orange-400 ring-2 ring-orange-200' : 'border-gray-100'
+    }`}>
       
-      {/* Badge unité en haut à droite */}
+      {/* 🔥 NOUVEAU : Badge "Modifié" */}
+      {isModified && !isEditing && (
+        <div className="absolute top-2 left-2 bg-orange-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg z-10 animate-pulse">
+          ⚠️ Modifié
+        </div>
+      )}
+
+      {/* Badge unité */}
       <div className="absolute top-4 right-4 bg-emerald-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg">
         {item.unite}
       </div>
@@ -27,10 +61,11 @@ export default function InventaireCard({ item, onEdit, onCancel, onSave, onDelet
             {isEditing ? (
               <input
                 type="text"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
+                value={editNom}
+                onChange={(e) => setEditNom(e.target.value)}
                 className="w-full px-3 py-2 text-lg font-bold border-2 border-emerald-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-100 bg-white"
                 placeholder="Nom de l'article"
+                disabled={disabled}
               />
             ) : (
               <>
@@ -51,24 +86,30 @@ export default function InventaireCard({ item, onEdit, onCancel, onSave, onDelet
             <div className="relative">
               <input
                 type="number"
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
+                value={editQuantite}
+                onChange={(e) => setEditQuantite(e.target.value)}
                 className="w-full px-4 py-3 text-2xl font-bold text-center border-2 border-emerald-400 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-100 bg-white shadow-inner"
                 placeholder="Quantité"
+                min="0"
+                step="0.01"
+                disabled={disabled}
               />
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => onSave(item.id)}
-                className="flex-1 px-4 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl hover:from-emerald-600 hover:to-teal-600 transition-all font-semibold shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                onClick={handleSave}
+                disabled={disabled}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl hover:from-emerald-600 hover:to-teal-600 transition-all font-semibold shadow-lg hover:shadow-xl flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                <Save className="w-4 h-4" />
-                Enregistrer
+                <Check className="w-4 h-4" />
+                Valider
               </button>
               <button
-                onClick={onCancel}
-                className="px-4 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all font-semibold"
+                onClick={handleCancel}
+                disabled={disabled}
+                className="px-4 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
               >
+                <X className="w-4 h-4" />
                 Annuler
               </button>
             </div>
@@ -76,11 +117,21 @@ export default function InventaireCard({ item, onEdit, onCancel, onSave, onDelet
         ) : (
           <div className="space-y-4">
             {/* Quantité en grand */}
-            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-6 text-center border-2 border-emerald-100">
-              <div className="text-5xl font-black bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent mb-1">
+            <div className={`bg-gradient-to-br rounded-xl p-6 text-center border-2 ${
+              isModified 
+                ? 'from-orange-50 to-yellow-50 border-orange-200'
+                : 'from-emerald-50 to-teal-50 border-emerald-100'
+            }`}>
+              <div className={`text-5xl font-black bg-gradient-to-r bg-clip-text text-transparent mb-1 ${
+                isModified
+                  ? 'from-orange-600 to-yellow-600'
+                  : 'from-emerald-600 to-teal-600'
+              }`}>
                 {item.quantite}
               </div>
-              <div className="text-sm text-emerald-700 font-semibold">
+              <div className={`text-sm font-semibold ${
+                isModified ? 'text-orange-700' : 'text-emerald-700'
+              }`}>
                 {item.unite} en stock
               </div>
             </div>
@@ -88,15 +139,17 @@ export default function InventaireCard({ item, onEdit, onCancel, onSave, onDelet
             {/* Boutons d'action */}
             <div className="flex gap-2">
               <button
-                onClick={() => onEdit(item.id, item.quantite, item.nom)}
-                className="flex-1 px-4 py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all font-semibold shadow-md hover:shadow-lg flex items-center justify-center gap-2 group"
+                onClick={handleStartEdit}
+                disabled={disabled}
+                className="flex-1 px-4 py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all font-semibold shadow-md hover:shadow-lg flex items-center justify-center gap-2 group disabled:opacity-50"
               >
                 <Edit className="w-4 h-4 group-hover:rotate-12 transition-transform" />
                 Modifier
               </button>
               <button
                 onClick={() => onDelete(item.id)}
-                className="px-4 py-2.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all shadow-md hover:shadow-lg group"
+                disabled={disabled}
+                className="px-4 py-2.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all shadow-md hover:shadow-lg group disabled:opacity-50"
                 title="Supprimer"
               >
                 <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" />

@@ -61,3 +61,176 @@ textarea::placeholder {
 label {
   color: #374151 !important; /* text-gray-700 */
 }
+
+
+/**
+ * Styles spécifiques pour l'impression
+ * À ajouter dans globals.css ou comme fichier séparé
+ */
+
+@media print {
+  /* Masquer les éléments non nécessaires */
+  .print\:hidden,
+  button,
+  nav,
+  .sidebar,
+  .navigation,
+  .actions-bar {
+    display: none !important;
+  }
+
+  /* Afficher les éléments réservés à l'impression */
+  .print\:block {
+    display: block !important;
+  }
+
+  /* Page setup */
+  @page {
+    size: A4 landscape;
+    margin: 15mm;
+  }
+
+  body {
+    background: white;
+    color: black;
+    font-size: 10pt;
+  }
+
+  /* Tableaux */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    page-break-inside: auto;
+    font-size: 9pt;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  th, td {
+    border: 1px solid #666 !important;
+    padding: 6px !important;
+  }
+
+  th {
+    background-color: #f0f0f0 !important;
+    font-weight: bold;
+    color: black !important;
+  }
+
+  /* Titres */
+  h1, h2, h3 {
+    color: black !important;
+    page-break-after: avoid;
+  }
+
+  h1 {
+    font-size: 18pt;
+    text-align: center;
+    margin-bottom: 10pt;
+  }
+
+  h2 {
+    font-size: 14pt;
+    margin-top: 15pt;
+    margin-bottom: 8pt;
+  }
+
+  h3 {
+    font-size: 12pt;
+    margin-top: 10pt;
+    margin-bottom: 6pt;
+  }
+
+  /* Éviter les coupures malheureuses */
+  .no-break {
+    page-break-inside: avoid;
+  }
+
+  /* Marges et espacements */
+  .space-y-8 > * + * {
+    margin-top: 20pt;
+  }
+
+  .space-y-6 > * + * {
+    margin-top: 15pt;
+  }
+
+  /* Bordures et ombres */
+  .shadow-md,
+  .shadow-lg,
+  .shadow-xl {
+    box-shadow: none !important;
+  }
+
+  .rounded-lg,
+  .rounded-xl {
+    border-radius: 0 !important;
+  }
+
+  /* Couleurs de fond (convertir en nuances de gris pour impression N&B) */
+  .bg-emerald-50,
+  .bg-green-50,
+  .bg-blue-50 {
+    background-color: #f9f9f9 !important;
+  }
+
+  .bg-orange-50,
+  .bg-yellow-50,
+  .bg-amber-50 {
+    background-color: #fafafa !important;
+  }
+
+  .bg-gray-50,
+  .bg-gray-100 {
+    background-color: #f5f5f5 !important;
+  }
+
+  /* Texte en couleur → noir */
+  .text-emerald-700,
+  .text-green-700,
+  .text-blue-700,
+  .text-orange-700,
+  .text-yellow-700 {
+    color: #333 !important;
+  }
+
+  /* Totaux en gras */
+  .font-bold {
+    font-weight: bold !important;
+  }
+
+  /* Optimiser la mise en page */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Forcer le paysage */
+  body {
+    -webkit-transform: rotate(0deg);
+    -moz-transform: rotate(0deg);
+    transform: rotate(0deg);
+  }
+
+  /* Sauts de page intelligents */
+  .page-break-before {
+    page-break-before: always;
+  }
+
+  .page-break-after {
+    page-break-after: always;
+  }
+
+  /* Éviter les lignes orphelines */
+  p, li, div {
+    orphans: 3;
+    widows: 3;
+  }
+}
