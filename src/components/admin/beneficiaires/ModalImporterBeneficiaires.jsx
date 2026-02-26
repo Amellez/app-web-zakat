@@ -3,11 +3,11 @@
 import { useState } from 'react';
 import { Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle, Loader2, X } from 'lucide-react';
 import Modal from '../ui/Modal';
-import { ajouterBeneficiaire, getBeneficiaires } from '@/lib/firebaseAdmin';
+import { ajouterBeneficiaire, getBeneficiaires, ajouterBeneficiairesBatch } from '@/lib/firebaseAdmin';
 import { useMosquee } from '@/context/MosqueeContext';
 import { determinerTailleFamille } from '@/lib/packCalculator';
 
-export default function ModalImporterBeneficiaires({ isOpen, onClose, onSuccess }) {
+export default function ModalImporterBeneficiaires({ isOpen, onClose, onSuccess, setIsImporting }) {
   const { mosqueeActive, getMosqueeActiveData } = useMosquee();
   const mosqueeData = getMosqueeActiveData();
   
@@ -162,23 +162,34 @@ export default function ModalImporterBeneficiaires({ isOpen, onClose, onSuccess 
           tailleFamille: determinerTailleFamille(nbPersonnes || 2),
           articleFavori: articleNormalise,
           source: 'Import',
-          statut: 'En attente',
+          statut: 'Validé',
           mosqueeId: mosqueeActive
         });
       });
 
-      // Importer dans Firebase
-      for (const beneficiaire of beneficiaires) {
-        try {
-          // Passer mosqueeId comme deuxième paramètre
-          await ajouterBeneficiaire(beneficiaire, mosqueeActive);
-          importes++;
-        } catch (error) {
-          console.error(`Erreur pour ${beneficiaire.nom}:`, error);
-          erreurs.push(`${beneficiaire.nom}: ${error.message}`);
-          ignores++;
-        }
+      // 🔥 DÉSACTIVER LE LISTENER pendant l'import
+      if (setIsImporting) {
+        setIsImporting(true);
       }
+
+      // 🔥 Import batch optimisé - Une seule transaction Firebase
+      console.log(`🚀 Début import batch de ${beneficiaires.length} bénéficiaires...`);
+      
+      const batchResult = await ajouterBeneficiairesBatch(beneficiaires, mosqueeActive);
+      
+      importes = batchResult.success;
+      
+      // Ajouter les erreurs du batch
+      if (batchResult.errors && batchResult.errors.length > 0) {
+        batchResult.errors.forEach(err => {
+          erreurs.push(`${err.beneficiaire}: ${err.error}`);
+          ignores++;
+        });
+      }
+
+      // 🔥 Attendre que Firebase se synchronise
+      console.log('⏳ Attente de la synchronisation Firebase...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       setResultat({
         total: beneficiaires.length + doublons,
@@ -187,7 +198,7 @@ export default function ModalImporterBeneficiaires({ isOpen, onClose, onSuccess 
         doublons
       });
 
-      // 🎉 NOUVEAU : Popup de succès avec customConfirm (système global)
+      // 🎉 Message de succès avec instruction pour régénération
       if (importes > 0) {
         // Import dynamique du customConfirm
         const { customConfirm } = await import('@/lib/globalPopup');
@@ -197,6 +208,7 @@ export default function ModalImporterBeneficiaires({ isOpen, onClose, onSuccess 
           `• ${importes} bénéficiaire${importes > 1 ? 's' : ''} importé${importes > 1 ? 's' : ''}\n` +
           `${doublons > 0 ? `• ${doublons} doublon${doublons > 1 ? 's' : ''} ignoré${doublons > 1 ? 's' : ''}\n` : ''}` +
           `${ignores - doublons > 0 ? `• ${ignores - doublons} erreur${ignores - doublons > 1 ? 's' : ''}\n` : ''}` +
+          `\n⚠️ IMPORTANT : Allez dans l'onglet "Packs" et cliquez sur "Générer les packs" pour attribuer les packs aux bénéficiaires.\n` +
           `\nRetourner à la liste des bénéficiaires ?`
         );
         
@@ -212,6 +224,11 @@ export default function ModalImporterBeneficiaires({ isOpen, onClose, onSuccess 
     } finally {
       setLoading(false);
       setErrors(erreurs);
+      
+      // 🔥 RÉACTIVER LE LISTENER
+      if (setIsImporting) {
+        setIsImporting(false);
+      }
     }
   };
 
@@ -457,7 +474,7 @@ export default function ModalImporterBeneficiaires({ isOpen, onClose, onSuccess 
           <ul className="space-y-1 text-sm text-yellow-800">
             <li>• <strong>Nom</strong> et <strong>Email</strong> sont obligatoires</li>
             <li>• Article Favori : RIZ, PÂTES ou COUSCOUS (optionnel)</li>
-            <li>• Les bénéficiaires importés auront le statut "En attente"</li>
+            <li>• Les bénéficiaires importés seront directement en attente d'attribution</li>
             <li>• Source sera automatiquement définie à "Import"</li>
             <li>• Vérifiez qu'il n'y a pas de doublons d'emails</li>
           </ul>

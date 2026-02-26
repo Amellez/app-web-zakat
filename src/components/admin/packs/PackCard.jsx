@@ -145,36 +145,41 @@ export default function PackCard({ pack, isSupplementPack = false, isBonusPack =
             📋 Contenu {isBonusPack ? 'du pack bonus' : isSupplementPack ? 'par supplément' : 'par pack'}
           </h4>
           <div className="space-y-2">
-            {pack.composition.map((item, idx) => (
-              <div 
-                key={idx} 
-                className="flex items-center justify-between p-4 rounded-lg border-2 bg-white border-gray-200"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                  <div>
-                    <span className="font-medium text-gray-800">
-                      {item.produit}
-                    </span>
-                    {item.type && (
-                      <span className="ml-2 text-xs text-gray-500 font-mono">
-                        ({item.type})
+            {pack.composition.map((item, idx) => {
+              // 🔥 FIX NaN : Gérer les valeurs undefined/null/0
+              const quantiteAffichee = isBonusPack 
+                ? (item.quantite || 0)
+                : (item.quantiteParFamille || item.quantite || 0);
+              
+              return (
+                <div 
+                  key={idx} 
+                  className="flex items-center justify-between p-4 rounded-lg border-2 bg-white border-gray-200"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                    <div>
+                      <span className="font-medium text-gray-800">
+                        {item.produit}
                       </span>
-                    )}
+                      {item.type && (
+                        <span className="ml-2 text-xs text-gray-500 font-mono">
+                          ({item.type})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-lg font-bold text-gray-900">
+                      {quantiteAffichee.toFixed(2)} {item.unite}
+                    </span>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {isBonusPack ? 'total disponible' : isSupplementPack ? 'par supplément' : 'par pack'}
+                    </div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <span className="text-lg font-bold text-gray-900">
-                    {isBonusPack 
-                      ? `${item.quantite?.toFixed(2)} ${item.unite}`
-                      : `${item.quantiteParFamille || item.quantite} ${item.unite}`}
-                  </span>
-                  <div className="text-xs text-gray-500 mt-1">
-                    {isBonusPack ? 'total disponible' : isSupplementPack ? 'par supplément' : 'par pack'}
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Note spéciale pour pack bonus */}
@@ -192,12 +197,15 @@ export default function PackCard({ pack, isSupplementPack = false, isBonusPack =
               <h5 className="font-bold text-gray-800 mb-3">📊 Quantités totales à préparer</h5>
               <div className="grid grid-cols-2 gap-3">
                 {pack.composition.map((item, idx) => {
-                  const qteParItem = item.quantiteParFamille || item.quantite;
+                  // 🔥 FIX NaN : Gérer les undefined/null/0
+                  const qteParItem = item.quantiteParFamille || item.quantite || 0;
+                  const totalQuantite = qteParItem * nombre;
+                  
                   return (
                     <div key={idx} className="bg-white p-3 rounded-lg">
                       <div className="text-xs text-gray-600 truncate">{item.produit}</div>
                       <div className="text-xl font-bold text-emerald-600">
-                        {(qteParItem * nombre).toFixed(2)} {item.unite}
+                        {totalQuantite.toFixed(2)} {item.unite}
                       </div>
                     </div>
                   );

@@ -8,6 +8,10 @@ import {
   PackageX,
   Upload,
   Download,
+  CheckCircle,
+  XCircle,
+  X,
+  Trash2,
 } from "lucide-react";
 import StatCard from "../ui/StatCard";
 import SearchAndFilter from "../ui/SearchAndFilter";
@@ -32,6 +36,13 @@ export default function BeneficiairesTab({ beneficiaires, setBeneficiaires }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [loading, setLoading] = useState(false);
+  
+  // États pour la sélection multiple
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [showBulkActions, setShowBulkActions] = useState(false);
+  
+  // État pour désactiver le listener pendant l'import
+  const [isImporting, setIsImporting] = useState(false);
 
   // 🔥 AJOUTÉ : Charger automatiquement quand mosqueeActive change
   useEffect(() => {
@@ -64,7 +75,8 @@ export default function BeneficiairesTab({ beneficiaires, setBeneficiaires }) {
 
   // Dans le composant, ajoutez ce useEffect APRÈS celui qui charge les bénéficiaires
   useEffect(() => {
-    if (!mosqueeActive) return;
+    // 🔥 Ne pas écouter pendant l'import pour éviter les rechargements multiples
+    if (!mosqueeActive || isImporting) return;
 
     // 🔥 Écouter les changements en temps réel
     const unsubscribe = ecouterBeneficiaires((data) => {
@@ -72,7 +84,7 @@ export default function BeneficiairesTab({ beneficiaires, setBeneficiaires }) {
     }, mosqueeActive);
 
     return () => unsubscribe();
-  }, [mosqueeActive]);
+  }, [mosqueeActive, isImporting]); // ← Dépendance isImporting ajoutée
 
   const filteredBeneficiaires = beneficiaires.filter((b) => {
     const matchesSearch =
@@ -145,6 +157,114 @@ export default function BeneficiairesTab({ beneficiaires, setBeneficiaires }) {
 
   const handleImportSuccess = () => {
     chargerBeneficiaires();
+  };
+
+  // Fonctions de sélection multiple
+  const handleToggleSelect = (id) => {
+    setSelectedIds(prev => {
+      if (prev.includes(id)) {
+        return prev.filter(selectedId => selectedId !== id);
+      } else {
+        return [...prev, id];
+      }
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.length === filteredBeneficiaires.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredBeneficiaires.map(b => b.id));
+    }
+  };
+
+  const handleBulkValidate = async () => {
+    if (selectedIds.length === 0) return;
+    
+    const confirmed = await window.confirm(
+      `Êtes-vous sûr de vouloir valider ${selectedIds.length} bénéficiaire(s) ?`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setLoading(true);
+      
+      // 🔥 Validation en parallèle au lieu de séquentielle
+      await Promise.all(
+        selectedIds.map(id => updateBeneficiaireStatut(id, "Validé"))
+      );
+      
+      // Le listener va automatiquement recharger
+      setSelectedIds([]);
+      alert(`✅ ${selectedIds.length} bénéficiaire(s) validé(s)`);
+    } catch (error) {
+      console.error("Erreur validation multiple:", error);
+      alert("Erreur lors de la validation multiple");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBulkReject = async () => {
+    if (selectedIds.length === 0) return;
+    
+    const confirmed = await window.confirm(
+      `Êtes-vous sûr de vouloir rejeter ${selectedIds.length} bénéficiaire(s) ?`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setLoading(true);
+      
+      // 🔥 Rejet en parallèle au lieu de séquentielle
+      await Promise.all(
+        selectedIds.map(id => updateBeneficiaireStatut(id, "Rejeté"))
+      );
+      
+      // Le listener va automatiquement recharger
+      setSelectedIds([]);
+      alert(`✅ ${selectedIds.length} bénéficiaire(s) rejeté(s)`);
+    } catch (error) {
+      console.error("Erreur rejet multiple:", error);
+      alert("Erreur lors du rejet multiple");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    
+    const confirmed = await window.confirm(
+      `⚠️ ATTENTION: Êtes-vous sûr de vouloir supprimer ${selectedIds.length} bénéficiaire(s) ?\n\nCette action est IRRÉVERSIBLE.`
+    );
+
+    if (!confirmed) return;
+
+    if (!mosqueeActive) {
+      alert("Erreur: Aucune mosquée sélectionnée");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // 🔥 Suppression en parallèle au lieu de séquentielle
+      await Promise.all(
+        selectedIds.map(id => supprimerBeneficiaire(id, mosqueeActive))
+      );
+      
+      // Le listener va automatiquement recharger, pas besoin de chargerBeneficiaires()
+      setSelectedIds([]);
+      alert(`✅ ${selectedIds.length} bénéficiaire(s) supprimé(s)`);
+    } catch (error) {
+      console.error("Erreur suppression multiple:", error);
+      alert("Erreur lors de la suppression multiple");
+    } finally {
+      setLoading(false);
+    }
   };
 
   // 📥 Export Excel
@@ -359,6 +479,57 @@ export default function BeneficiairesTab({ beneficiaires, setBeneficiaires }) {
         addButtonText="Ajouter sur place"
       />
 
+      {/* Barre d'actions groupées */}
+      {selectedIds.length > 0 && (
+        <div className="bg-gradient-to-r from-emerald-50 to-blue-50 border-2 border-emerald-300 rounded-lg p-4 flex items-center justify-between animate-in fade-in duration-200">
+          <div className="flex items-center gap-3">
+            <div className="bg-emerald-600 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold">
+              {selectedIds.length}
+            </div>
+            <span className="font-semibold text-gray-800">
+              {selectedIds.length} bénéficiaire{selectedIds.length > 1 ? 's' : ''} sélectionné{selectedIds.length > 1 ? 's' : ''}
+            </span>
+          </div>
+          
+          <div className="flex gap-2">
+            <button
+              onClick={handleBulkValidate}
+              disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold disabled:opacity-50 text-sm"
+            >
+              <CheckCircle className="w-4 h-4" />
+              Valider
+            </button>
+            
+            <button
+              onClick={handleBulkReject}
+              disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition font-semibold disabled:opacity-50 text-sm"
+            >
+              <XCircle className="w-4 h-4" />
+              Rejeter
+            </button>
+            
+            <button
+              onClick={handleBulkDelete}
+              disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-semibold disabled:opacity-50 text-sm"
+            >
+              <Trash2 className="w-4 h-4" />
+              Supprimer
+            </button>
+            
+            <button
+              onClick={() => setSelectedIds([])}
+              className="flex items-center gap-2 px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-semibold text-sm"
+            >
+              <X className="w-4 h-4" />
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Tableau */}
       {loading && beneficiaires.length === 0 ? (
         <div className="flex items-center justify-center py-12">
@@ -370,6 +541,15 @@ export default function BeneficiairesTab({ beneficiaires, setBeneficiaires }) {
             <table className="w-full">
               <thead className="bg-gray-50 border-b-2 border-gray-200">
                 <tr>
+                  <th className="px-6 py-4 w-12">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.length > 0 && selectedIds.length === filteredBeneficiaires.length}
+                      onChange={handleSelectAll}
+                      className="w-5 h-5 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 cursor-pointer"
+                      title={selectedIds.length === filteredBeneficiaires.length ? "Tout désélectionner" : "Tout sélectionner"}
+                    />
+                  </th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
                     Nom
                   </th>
@@ -397,7 +577,7 @@ export default function BeneficiairesTab({ beneficiaires, setBeneficiaires }) {
                 {filteredBeneficiaires.length === 0 ? (
                   <tr>
                     <td
-                      colSpan="7"
+                      colSpan="8"
                       className="px-6 py-12 text-center text-gray-500"
                     >
                       Aucun bénéficiaire trouvé
@@ -412,6 +592,8 @@ export default function BeneficiairesTab({ beneficiaires, setBeneficiaires }) {
                       onReject={handleReject}
                       onEdit={handleEdit}
                       onDelete={handleDelete}
+                      isSelected={selectedIds.includes(beneficiaire.id)}
+                      onToggleSelect={handleToggleSelect}
                     />
                   ))
                 )}
@@ -444,6 +626,7 @@ export default function BeneficiairesTab({ beneficiaires, setBeneficiaires }) {
         isOpen={showImportForm}
         onClose={() => setShowImportForm(false)}
         onSuccess={handleImportSuccess}
+        setIsImporting={setIsImporting}
       />
     </div>
   );

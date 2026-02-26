@@ -15,12 +15,8 @@ export default function ParametresPage() {
     repartition: {
       standard: 70,
       supplement: 30
-    },
-    coefficients: {
-      Petite: 1,
-      Moyenne: 2,
-      Grande: 3
     }
+    // 🔥 SUPPRIMÉ : coefficients (maintenant calculés automatiquement)
   });
 
   const [erreurs, setErreurs] = useState([]);
@@ -34,7 +30,13 @@ export default function ParametresPage() {
       
       try {
         const params = await getParametres(mosqueeActive);
-        setParametres(params);
+        // 🔥 On garde uniquement la répartition
+        setParametres({
+          repartition: params.repartition || {
+            standard: 70,
+            supplement: 30
+          }
+        });
       } catch (error) {
         console.error('Erreur chargement paramètres:', error);
       } finally {
@@ -54,16 +56,6 @@ export default function ParametresPage() {
       repartition: {
         [type]: newValue,
         [autreType]: autreValue
-      }
-    }));
-  };
-
-  const handleCoefficientChange = (taille, value) => {
-    setParametres(prev => ({
-      ...prev,
-      coefficients: {
-        ...prev.coefficients,
-        [taille]: parseFloat(value)
       }
     }));
   };
@@ -163,7 +155,7 @@ export default function ParametresPage() {
 
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">⚙️ Paramètres de Distribution</h1>
-          <p className="text-gray-600">Configurez la répartition et les coefficients pour la génération des packs</p>
+          <p className="text-gray-600">Configurez la répartition pour la génération des packs</p>
         </div>
 
         {erreurs.length > 0 && (
@@ -182,6 +174,7 @@ export default function ParametresPage() {
           </div>
         )}
 
+        {/* Section Répartition */}
         <div className="bg-white rounded-xl shadow-lg border-2 border-gray-200 p-8 mb-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
             📊 Répartition des Articles Favoris
@@ -193,7 +186,7 @@ export default function ParametresPage() {
           <div className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Packs Standard (avec coefficients)
+                Packs Standard (distribution optimale)
               </label>
               <div className="flex items-center gap-4">
                 <input
@@ -215,7 +208,7 @@ export default function ParametresPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Suppléments (équitable, sans coefficient)
+                Suppléments (distribution équitable)
               </label>
               <div className="flex items-center gap-4">
                 <input
@@ -258,84 +251,65 @@ export default function ParametresPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg border-2 border-gray-200 p-8 mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-            🎯 Coefficients par Taille de Famille
+        {/* 🔥 NOUVELLE Section : Explication Coefficients Dynamiques */}
+        <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl shadow-lg border-2 border-blue-200 p-8 mb-6">
+          <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+            🤖 Distribution Intelligente
           </h2>
-          <p className="text-sm text-gray-600 mb-6">
-            Définissez les multiplicateurs pour chaque taille de famille (utilisés uniquement pour les packs standard)
-          </p>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="border-2 border-blue-200 rounded-lg p-6 bg-blue-50">
-              <label className="block text-sm font-medium text-blue-800 mb-4">
-                👨‍👩‍👦 Petite Famille (1-2 personnes)
-              </label>
-              <input
-                type="number"
-                min="0.1"
-                max="10"
-                step="0.1"
-                value={parametres.coefficients.Petite}
-                onChange={(e) => handleCoefficientChange('Petite', e.target.value)}
-                className="w-full px-4 py-3 border-2 border-blue-300 rounded-lg text-center text-2xl font-bold text-blue-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-
-            <div className="border-2 border-purple-200 rounded-lg p-6 bg-purple-50">
-              <label className="block text-sm font-medium text-purple-800 mb-4">
-                👨‍👩‍👧‍👦 Moyenne Famille (3-5 personnes)
-              </label>
-              <input
-                type="number"
-                min="0.1"
-                max="10"
-                step="0.1"
-                value={parametres.coefficients.Moyenne}
-                onChange={(e) => handleCoefficientChange('Moyenne', e.target.value)}
-                className="w-full px-4 py-3 border-2 border-purple-300 rounded-lg text-center text-2xl font-bold text-purple-600 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-              />
-            </div>
-
-            <div className="border-2 border-orange-200 rounded-lg p-6 bg-orange-50">
-              <label className="block text-sm font-medium text-orange-800 mb-4">
-                👨‍👩‍👧‍👦‍👶 Grande Famille (6+ personnes)
-              </label>
-              <input
-                type="number"
-                min="0.1"
-                max="10"
-                step="0.1"
-                value={parametres.coefficients.Grande}
-                onChange={(e) => handleCoefficientChange('Grande', e.target.value)}
-                className="w-full px-4 py-3 border-2 border-orange-300 rounded-lg text-center text-2xl font-bold text-orange-600 focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-              />
+          <div className="space-y-4 text-sm text-gray-800">
+            <p>
+              Les quantités par famille sont maintenant calculées <strong>automatiquement</strong> pour chaque aliment afin de :
+            </p>
+            <ul className="space-y-2 ml-4">
+              <li className="flex items-start gap-2">
+                <span className="text-emerald-600 font-bold">✓</span>
+                <span>Minimiser les restes (utilisation optimale du stock)</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-emerald-600 font-bold">✓</span>
+                <span>Garantir que toutes les familles reçoivent au moins quelque chose</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-emerald-600 font-bold">✓</span>
+                <span>Adapter la distribution selon la quantité disponible de chaque aliment</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-emerald-600 font-bold">✓</span>
+                <span>Respecter une progression régulière entre petites, moyennes et grandes familles</span>
+              </li>
+            </ul>
+            <div className="mt-6 p-4 bg-blue-100 rounded-lg">
+              <p className="text-xs text-blue-800 font-medium">
+                💡 Exemple : Si vous avez 300kg de riz pour 70 familles, le système calculera automatiquement les meilleures quantités pour chaque taille de famille afin d'utiliser au maximum le stock disponible.
+              </p>
             </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl shadow-lg border-2 border-blue-200 p-8 mb-6">
+        {/* Exemple de calcul simplifié */}
+        <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl shadow-lg border-2 border-purple-200 p-8 mb-6">
           <h2 className="text-xl font-bold text-gray-900 mb-4">💡 Exemple de calcul</h2>
           <p className="text-sm text-gray-700 mb-4">
             Avec 100kg de RIZ et vos paramètres actuels :
           </p>
           <div className="space-y-2 text-sm text-gray-800">
             <div className="flex items-center justify-between p-3 bg-white rounded-lg">
-              <span>Packs standard (avec coefficients)</span>
+              <span>Packs standard (distribution optimale)</span>
               <span className="font-bold text-emerald-600">{parametres.repartition.standard}kg</span>
             </div>
             <div className="flex items-center justify-between p-3 bg-white rounded-lg">
-              <span>Suppléments (équitable)</span>
+              <span>Suppléments (pour ceux qui ont choisi RIZ)</span>
               <span className="font-bold text-amber-600">{parametres.repartition.supplement}kg</span>
             </div>
-            <div className="mt-4 p-3 bg-blue-100 rounded-lg">
-              <p className="text-xs text-blue-800">
-                Une <strong>Grande famille</strong> recevra <strong>{parametres.coefficients.Grande}×</strong> plus qu'une <strong>Petite famille</strong> dans les packs standard
+            <div className="mt-4 p-3 bg-purple-100 rounded-lg">
+              <p className="text-xs text-purple-800">
+                Les {parametres.repartition.standard}kg seront répartis intelligemment entre toutes les familles selon un algorithme qui maximise l'utilisation du stock et garantit l'équité.
               </p>
             </div>
           </div>
         </div>
 
+        {/* Boutons d'action */}
         <div className="flex justify-end gap-4">
           <button
             onClick={() => window.history.back()}

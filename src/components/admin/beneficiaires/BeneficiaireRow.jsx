@@ -4,7 +4,7 @@ import StatutBadge from '../ui/StatutBadge';
 import SourceBadge from '../ui/SourceBadge';
 import PackAttribueDetails from './PackAttribueDetails';
 
-export default function BeneficiaireRow({ beneficiaire, onValidate, onReject, onEdit, onDelete }) {
+export default function BeneficiaireRow({ beneficiaire, onValidate, onReject, onEdit, onDelete, isSelected, onToggleSelect }) {
   const [showPackDetails, setShowPackDetails] = useState(false);
   
   // Emojis pour les articles favoris
@@ -22,6 +22,14 @@ export default function BeneficiaireRow({ beneficiaire, onValidate, onReject, on
   return (
     <>
       <tr className="hover:bg-gray-50">
+        <td className="px-6 py-4 w-12">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => onToggleSelect(beneficiaire.id)}
+            className="w-5 h-5 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 cursor-pointer"
+          />
+        </td>
         <td className="px-6 py-4">
           <div>
             <p className="font-semibold text-gray-800">{beneficiaire.nom}</p>
@@ -118,7 +126,7 @@ export default function BeneficiaireRow({ beneficiaire, onValidate, onReject, on
       {/* Ligne extensible pour les détails du pack */}
       {showPackDetails && aPackAttribue && (
         <tr className="bg-gradient-to-r from-blue-50/50 to-emerald-50/50">
-          <td colSpan="7" className="px-6 py-4">
+          <td colSpan="8" className="px-6 py-4">
             <PackAttribueDetails beneficiaire={beneficiaire} />
           </td>
         </tr>

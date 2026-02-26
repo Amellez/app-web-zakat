@@ -13,7 +13,7 @@ export default function ModalDetailCluster({
   onToggleAll,
   onAssignerSelection
 }) {
-  const [packs, setPacks] = useState([]);
+  const [packs, setPacks] = useState({ standard: [], supplements: [] });
   const [loading, setLoading] = useState(true);
   const [filtreFamily, setFiltreFamily] = useState('Tous');
 
@@ -30,9 +30,11 @@ export default function ModalDetailCluster({
     setLoading(true);
     try {
       const packsData = await getPacks(cluster.mosqueeId);
-      setPacks(packsData);
+      // 🔥 FIX : Sécuriser contre null/undefined
+      setPacks(packsData || { standard: [], supplements: [] });
     } catch (error) {
       console.error('Erreur chargement packs:', error);
+      setPacks({ standard: [], supplements: [] });
     } finally {
       setLoading(false);
     }
@@ -41,8 +43,11 @@ export default function ModalDetailCluster({
   const getPackInfo = (beneficiaire) => {
     if (!beneficiaire) return null;
 
-    const packStandard = packs.find(p => p.id === beneficiaire.packId);
-    const packSupplement = packs.find(p => p.id === beneficiaire.packSupplementId);
+    // 🔥 FIX : getPacks retourne { standard: [...], supplements: [...] }
+    const allPacks = [...(packs.standard || []), ...(packs.supplements || [])];
+    
+    const packStandard = allPacks.find(p => p.id === beneficiaire.packId);
+    const packSupplement = allPacks.find(p => p.id === beneficiaire.packSupplementId);
 
     return { packStandard, packSupplement };
   };

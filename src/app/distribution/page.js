@@ -29,8 +29,12 @@ export default function DistributionPage() {
     console.log('📦 Chargement packs pour mosquée:', mosqueeId);
     try {
       const packsData = await getPacks(mosqueeId);
-      console.log('📦 Packs chargés:', packsData.length, packsData);
-      setPacks(packsData);
+      
+      // 🔥 FIX : getPacks retourne maintenant { standard: [...], supplements: [...] }
+      const allPacks = [...(packsData.standard || []), ...(packsData.supplements || [])];
+      
+      console.log('📦 Packs chargés:', allPacks.length, allPacks);
+      setPacks(allPacks);
     } catch (err) {
       console.error('❌ Erreur chargement packs:', err);
     } finally {
